@@ -25,24 +25,14 @@ npm run build    # بناء نسخة النشر في dist/
 
 1. ارفع هذا المستودع إلى GitHub.
 2. من لوحة Vercel: **Add New Project** ← استورد المستودع.
-3. أضف متغيرات البيئة التالية في **Settings → Environment Variables** (وهي متغيّرات عامة تُقرأ عند البناء):
-   ```
-   VITE_FIREBASE_API_KEY
-   VITE_FIREBASE_AUTH_DOMAIN
-   VITE_FIREBASE_DATABASE_URL
-   VITE_FIREBASE_PROJECT_ID
-   VITE_FIREBASE_STORAGE_BUCKET
-   VITE_FIREBASE_MESSAGING_SENDER_ID
-   VITE_FIREBASE_APP_ID
-   ```
-   > نفس القيم الموجودة محليًا في ملف `.env.local` (لا يُرفَع إلى Git). بدونها يعمل الموقع بوضع محلي دون مزامنة.
-4. الإطار: تُكتشف تلقائيًا (Vite)، أمر البناء `npm run build` والمخرجات `dist`.
+3. الإطار: تُكتشف تلقائيًا (Vite)، أمر البناء `npm run build` والمخرجات `dist`.
+4. **لا حاجة لأي متغيرات بيئة** — إعداد Firebase مضمن في `src/lib/firebaseConfig.ts` (وهو عام بطبيعته، والأمان من قواعد قاعدة البيانات).
 5. اضغط **Deploy** — سيظهر موقعك على رابط مجاني مثل `almagles-schedule.vercel.app`.
 
 ## إعداد Firebase (المزامنة)
 
 - أنشئ مشروعًا في [console.firebase.google.com](https://console.firebase.google.com) وفعّل **Realtime Database** (أي منطقة).
-- من **Project settings → Your apps → Web** انسخ القيم وضَعها في `.env.local` (أو في Vercel) بالمتغيرات أعلاه بدءًا بـ `VITE_FIREBASE_`.
+- خذ القيم من **Project settings → Your apps → Web** وضعها في `src/lib/firebaseConfig.ts`.
 - اذهب إلى **Realtime Database → Rules** وضَع القاعدة لفتح القراءة والكتابة:
   ```json
   { "rules": { ".read": true, ".write": true } }
