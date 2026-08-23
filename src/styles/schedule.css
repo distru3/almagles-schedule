@@ -171,13 +171,14 @@ details.help table th {
   margin: 0 auto;
   background: #fff;
   border-radius: 12px;
-  overflow: hidden;
+  overflow-x: auto;
   border: 1px solid var(--line);
   box-shadow: 0 4px 18px rgba(15, 61, 62, 0.08);
 }
 table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 720px;
 }
 thead th {
   background: var(--ink);
@@ -373,6 +374,119 @@ td.col-num {
   color: #6c6249;
   font-size: 0.85rem;
   text-align: left;
+}
+
+/* ===== Mobile: reflow each row into a card ===== */
+@media (max-width: 720px) {
+  body {
+    padding: 16px 10px 40px;
+  }
+  .masthead {
+    padding: 24px 20px;
+  }
+  .masthead h1 {
+    font-size: 1.9rem;
+  }
+  .toolbar {
+    gap: 8px;
+  }
+  .toolbar button,
+  .toolbar label {
+    flex: 1 1 calc(50% - 8px);
+    justify-content: center;
+    font-size: 0.86rem;
+    padding: 12px 8px;
+  }
+
+  .table-wrap {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    overflow: visible;
+  }
+  table {
+    min-width: 0;
+  }
+  /* Flatten the table into stacked cards */
+  table,
+  thead,
+  tbody,
+  tr,
+  th,
+  td {
+    display: block;
+    width: 100%;
+  }
+  thead {
+    display: none;
+  }
+  tbody tr {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(15, 61, 62, 0.06);
+    padding: 6px 12px 12px;
+    margin: 0 0 14px;
+  }
+  tbody tr:nth-child(even) {
+    background: #fff;
+  }
+  td {
+    display: grid;
+    grid-template-columns: 84px 1fr;
+    align-items: center;
+    gap: 6px 10px;
+    border: none !important;
+    padding: 6px 0;
+    font-size: 0.9rem;
+  }
+  td::before {
+    content: attr(data-label);
+    color: var(--ink);
+    font-weight: 700;
+    font-size: 0.8rem;
+    line-height: 1.4;
+  }
+  td.col-num::before {
+    content: 'رقم';
+  }
+  /* Date cell contents fill the content column */
+  .date-cell {
+    padding: 6px 0;
+  }
+  .date-btn {
+    width: 100%;
+    padding: 4px 0;
+    text-align: right;
+  }
+  /* Links + delete right-aligned in their grid row */
+  td.link-cell .link-holder,
+  td[data-label='حذف'] {
+    justify-self: stretch;
+  }
+  td[data-label='حذف'] .del-btn {
+    font-size: 1.3rem;
+    padding: 8px 12px;
+    justify-self: end;
+  }
+  .link-btn,
+  .link-set {
+    justify-self: start;
+  }
+  /* Empty state spans the card cleanly */
+  .empty-row td {
+    display: block;
+    text-align: center;
+    padding: 20px;
+    font-style: italic;
+  }
+  .empty-row td::before {
+    content: none;
+  }
+  /* The internal scroll rule must not apply on mobile */
+  .table-wrap {
+    overflow: visible;
+  }
 }
 
 /* ===== Print ===== */

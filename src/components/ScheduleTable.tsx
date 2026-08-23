@@ -83,19 +83,19 @@ export default function ScheduleTable({ rows, onUpdate, onDelete, onSetLink }: P
         </thead>
         <tbody>
           {rows.length === 0 && (
-            <tr>
-              <td colSpan={8} style={{ textAlign: 'center', color: '#a8a29e', padding: '28px', fontStyle: 'italic' }}>
+            <tr className="empty-row">
+              <td data-label="" colSpan={8} style={{ textAlign: 'center', color: '#a8a29e', padding: '28px', fontStyle: 'italic' }}>
                 لا توجد صفوف بعد — اضغط «➕ إضافة صف» أو استورد ملف CSV.
               </td>
             </tr>
           )}
           {rows.map((row, i) => (
             <tr key={row.id}>
-              <td className="col-num">{i + 1}</td>
-              <td className="date-cell">
+              <td className="col-num" data-label="رقم">{i + 1}</td>
+              <td className="date-cell" data-label="التاريخ">
                 <DateCell value={row.date} onChange={(v) => onUpdate(row.id, { date: v })} />
               </td>
-              <td>
+              <td data-label="الوقت">
                 <input
                   className="cell-text"
                   value={row.time}
@@ -103,7 +103,7 @@ export default function ScheduleTable({ rows, onUpdate, onDelete, onSetLink }: P
                   onChange={(e) => onUpdate(row.id, { time: e.target.value })}
                 />
               </td>
-              <td>
+              <td data-label="القسم">
                 <input
                   className="cell-text"
                   value={row.section}
@@ -111,7 +111,7 @@ export default function ScheduleTable({ rows, onUpdate, onDelete, onSetLink }: P
                   onChange={(e) => onUpdate(row.id, { section: e.target.value })}
                 />
               </td>
-              <td>
+              <td data-label="العنوان">
                 <textarea
                   className="cell-text"
                   value={row.title}
@@ -120,7 +120,7 @@ export default function ScheduleTable({ rows, onUpdate, onDelete, onSetLink }: P
                   onChange={(e) => onUpdate(row.id, { title: e.target.value })}
                 />
               </td>
-              <td>
+              <td data-label="ملاحظات">
                 <textarea
                   className="cell-text area"
                   value={row.notes}
@@ -129,10 +129,10 @@ export default function ScheduleTable({ rows, onUpdate, onDelete, onSetLink }: P
                   onChange={(e) => onUpdate(row.id, { notes: e.target.value })}
                 />
               </td>
-              <td className="link-cell">
+              <td className="link-cell" data-label="الرابط">
                 <LinkCell row={row} onSetLink={() => onSetLink(row.id)} />
               </td>
-              <td className="no-print" style={{ textAlign: 'center' }}>
+              <td className="no-print" data-label="حذف" style={{ textAlign: 'center' }}>
                 <button
                   className="del-btn"
                   onClick={() => onDelete(row.id)}
