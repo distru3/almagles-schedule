@@ -29,15 +29,16 @@ export default function App() {
     const syncStatusRef = { live: false };
 
     fetchScheduleOnce().then((remote) => {
-      if (!active || !remote) {
-        if (active && !remote) setSyncStatus('live');
-        return;
+      if (!active) return;
+      if (remote !== null) {
+        skipPush.current = true;
+        remoteApplied.current = true;
+        setRows(remote);
+        saveRows(remote);
+      } else {
+        remoteApplied.current = true;
       }
-      skipPush.current = true;
-      remoteApplied.current = true;
-      setRows(remote);
-      saveRows(remote);
-      if (active) setSyncStatus('live');
+      setSyncStatus('live');
     });
 
     const unsub = listenToSchedule((remote) => {
