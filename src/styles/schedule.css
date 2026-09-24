@@ -243,7 +243,7 @@ td.col-num {
   font-weight: 700;
 }
 
-/* Editable text inputs render as plain text (like the original contenteditable cells) */
+/* Editable text inputs render as plain text that auto-folds and expands */
 .cell-text {
   width: 100%;
   min-height: 28px;
@@ -255,8 +255,14 @@ td.col-num {
   outline: none;
   resize: none;
   border-radius: 6px;
-  padding: 2px 4px;
-  line-height: 1.65;
+  padding: 3px 5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  overflow-y: hidden;
+  box-sizing: border-box;
+  display: block;
 }
 .cell-text:focus {
   background: #fffdf5;
@@ -267,7 +273,7 @@ td.col-num {
   font-style: italic;
 }
 .cell-text.area {
-  min-height: 44px;
+  min-height: 38px;
 }
 
 .btn-add-week {

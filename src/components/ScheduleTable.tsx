@@ -1,4 +1,4 @@
-import { Fragment, useRef } from 'react';
+import { Fragment, useRef, useEffect } from 'react';
 import type { ScheduleRow, CustomColumn } from '../types';
 import { formatHijri, formatGregorianShort, formatWeekday, getWeekKey, formatWeekRange } from '../lib/dates';
 
@@ -79,6 +79,45 @@ function DateCell({ value, onChange }: { value: string; onChange: (v: string) =>
         )}
       </div>
     </div>
+  );
+}
+
+function AutoFoldingCell({
+  value,
+  placeholder,
+  onChange,
+  className = 'cell-text',
+}: {
+  value: string;
+  placeholder?: string;
+  onChange: (v: string) => void;
+  className?: string;
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const resize = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.max(el.scrollHeight, 28)}px`;
+  };
+
+  useEffect(() => {
+    resize();
+  }, [value]);
+
+  return (
+    <textarea
+      ref={textareaRef}
+      rows={1}
+      className={className}
+      value={value}
+      placeholder={placeholder}
+      onChange={(e) => {
+        onChange(e.target.value);
+        resize();
+      }}
+    />
   );
 }
 
@@ -319,48 +358,42 @@ export default function ScheduleTable({
                           <DateCell value={row.date} onChange={(v) => onUpdate(row.id, { date: v })} />
                         </td>
                         <td data-label="الوقت">
-                          <input
-                            className="cell-text"
+                          <AutoFoldingCell
                             value={row.time}
                             placeholder="مثال: 10:00"
-                            onChange={(e) => onUpdate(row.id, { time: e.target.value })}
+                            onChange={(v) => onUpdate(row.id, { time: v })}
                           />
                         </td>
                         <td data-label="القسم">
-                          <input
-                            className="cell-text"
+                          <AutoFoldingCell
                             value={row.section}
                             placeholder="القسم…"
-                            onChange={(e) => onUpdate(row.id, { section: e.target.value })}
+                            onChange={(v) => onUpdate(row.id, { section: v })}
                           />
                         </td>
                         <td data-label="العنوان">
-                          <textarea
-                            className="cell-text"
+                          <AutoFoldingCell
                             value={row.title}
                             placeholder="عنوان الجلسة…"
-                            rows={1}
-                            onChange={(e) => onUpdate(row.id, { title: e.target.value })}
+                            onChange={(v) => onUpdate(row.id, { title: v })}
                           />
                         </td>
                         <td data-label="ملاحظات">
-                          <textarea
+                          <AutoFoldingCell
                             className="cell-text area"
                             value={row.notes}
                             placeholder="ملاحظات أو فوائد…"
-                            rows={2}
-                            onChange={(e) => onUpdate(row.id, { notes: e.target.value })}
+                            onChange={(v) => onUpdate(row.id, { notes: v })}
                           />
                         </td>
 
                         {columns.map((col) => (
                           <td key={col.id} className="col-custom" data-label={col.label}>
-                            <input
-                              className="cell-text"
+                            <AutoFoldingCell
                               value={row.customValues?.[col.id] || ''}
                               placeholder={`${col.label}…`}
-                              onChange={(e) => {
-                                const next = { ...(row.customValues || {}), [col.id]: e.target.value };
+                              onChange={(v) => {
+                                const next = { ...(row.customValues || {}), [col.id]: v };
                                 onUpdate(row.id, { customValues: next });
                               }}
                             />
