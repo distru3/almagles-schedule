@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import type { ScheduleRow, CustomColumn } from '../types';
 import { formatHijri, formatGregorianShort, formatWeekday, getWeekKey, formatWeekRange } from '../lib/dates';
 
@@ -132,7 +133,7 @@ export default function ScheduleTable({
           {sortedKeys.map((weekKey, weekIdx) => {
             const weekRows = weekMap.get(weekKey) || [];
             return (
-              <tbody key={`week-group-${weekKey}`} className="week-group-tbody">
+              <Fragment key={`week-group-${weekKey}`}>
                 <tr className="week-separator-row">
                   <td colSpan={totalCols} data-label="الأسبوع">
                     <div className="week-header-content">
@@ -229,7 +230,7 @@ export default function ScheduleTable({
                     </tr>
                   );
                 })}
-              </tbody>
+              </Fragment>
             );
           })}
         </tbody>
