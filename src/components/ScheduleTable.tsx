@@ -354,7 +354,7 @@ export default function ScheduleTable({
                         </td>
 
                         {columns.map((col) => (
-                          <td key={col.id} data-label={col.label}>
+                          <td key={col.id} className="col-custom" data-label={col.label}>
                             <input
                               className="cell-text"
                               value={row.customValues?.[col.id] || ''}

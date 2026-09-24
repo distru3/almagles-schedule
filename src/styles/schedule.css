@@ -195,26 +195,31 @@ th.col-num {
   text-align: center;
 }
 th.col-date {
-  width: 170px;
+  width: 165px;
+}
+th.col-time {
+  width: 95px;
+}
+th.col-section {
+  width: 130px;
+}
+th.col-title {
+  min-width: 190px;
+}
+th.col-notes {
+  min-width: 190px;
+}
+th.col-custom,
+td.col-custom {
+  min-width: 175px;
+  width: 185px;
 }
 th.col-link {
-  width: 130px;
+  width: 120px;
   text-align: center;
 }
 th.col-del {
   width: 46px;
-}
-th.col-time {
-  width: 100px;
-}
-th.col-section {
-  width: 140px;
-}
-th.col-title {
-  min-width: 220px;
-}
-th.col-notes {
-  min-width: 220px;
 }
 
 tbody tr {
@@ -1341,6 +1346,10 @@ td.col-num {
     font-weight: 700 !important;
     width: 26px !important;
     text-align: center !important;
+  }
+  th.col-custom,
+  td.col-custom {
+    min-width: 85px !important;
   }
   .link-btn {
     display: none !important;
