@@ -24,7 +24,7 @@ export default function Toolbar({
   const fileRef = useRef<HTMLInputElement>(null);
   return (
     <div className="toolbar no-print">
-      <button className="btn-add-week" onClick={onAddWeek} title="تجهيز أسبوع كامل (الاثنين - الأحد) بتواريخه الحقيقية">
+      <button className="btn-add-week" onClick={onAddWeek} title="تجهيز أسبوع كامل (السبت - الجمعة) بتواريخه الحقيقية">
         📅 إضافة أسبوع
       </button>
       <button className="btn-add" onClick={onAddRow} title="إضافة صف/جلسة منفردة">

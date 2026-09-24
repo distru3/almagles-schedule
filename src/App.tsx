@@ -4,25 +4,26 @@ import { emptyRow, parseCsv, downloadCsv, downloadTemplate } from './lib/csv';
 import { loadRows, saveRows, loadColumns, saveColumns } from './lib/storage';
 import { isFirebaseConfigured, database } from './lib/firebase';
 import { fetchScheduleOnce, pushSchedule, listenToSchedule } from './lib/sync';
-import { getMondayOfWeek, generateWeekDates, addDays, isValidISODate, toISODate, formatWeekRange } from './lib/dates';
+import { getSaturdayOfWeek, generateWeekDates, addDays, isValidISODate, toISODate, formatWeekRange } from './lib/dates';
 import Masthead from './components/Masthead';
 import HelpInstructions from './components/HelpInstructions';
 import Toolbar from './components/Toolbar';
 import ScheduleTable from './components/ScheduleTable';
 import LinkModal from './components/LinkModal';
 import AddColumnModal from './components/AddColumnModal';
+import AddWeekModal from './components/AddWeekModal';
 
 type SyncStatus = 'connecting' | 'live' | 'local';
 
-function createWeekRows(mondayDate: Date): ScheduleRow[] {
-  const dates = generateWeekDates(mondayDate);
+function createWeekRows(saturdayDate: Date): ScheduleRow[] {
+  const dates = generateWeekDates(saturdayDate);
   return dates.map((d) => emptyRow(d));
 }
 
 function createInitialWeeks(): ScheduleRow[] {
-  const thisMonday = getMondayOfWeek(new Date());
-  const nextMonday = addDays(thisMonday, 7);
-  return [...createWeekRows(thisMonday), ...createWeekRows(nextMonday)];
+  const thisSaturday = getSaturdayOfWeek(new Date());
+  const nextSaturday = addDays(thisSaturday, 7);
+  return [...createWeekRows(thisSaturday), ...createWeekRows(nextSaturday)];
 }
 
 export default function App() {
@@ -40,6 +41,10 @@ export default function App() {
 
   const [activeLinkRowId, setActiveLinkRowId] = useState<string | null>(null);
   const [isAddColumnOpen, setIsAddColumnOpen] = useState(false);
+  const [isAddWeekOpen, setIsAddWeekOpen] = useState(false);
+  const [selectedWeekKey, setSelectedWeekKey] = useState<string>(() => {
+    return toISODate(getSaturdayOfWeek(new Date()));
+  });
 
   const skipPush = useRef(false);
   const remoteApplied = useRef(false);
@@ -133,34 +138,44 @@ export default function App() {
     setRows((prev) => prev.filter((r) => r.id !== id));
   };
 
-  const computeNextMonday = (): Date => {
-    let latestMonday: Date | null = null;
+  const computeNextSaturday = (): Date => {
+    let latestSaturday: Date | null = null;
     for (const r of rows) {
       if (isValidISODate(r.date)) {
-        const mon = getMondayOfWeek(r.date);
-        if (!latestMonday || mon.getTime() > latestMonday.getTime()) {
-          latestMonday = mon;
+        const sat = getSaturdayOfWeek(r.date);
+        if (!latestSaturday || sat.getTime() > latestSaturday.getTime()) {
+          latestSaturday = sat;
         }
       }
     }
-    return latestMonday ? addDays(latestMonday, 7) : getMondayOfWeek(new Date());
+    return latestSaturday ? addDays(latestSaturday, 7) : getSaturdayOfWeek(new Date());
   };
 
-  const nextMondayDate = computeNextMonday();
-  const nextWeekLabel = formatWeekRange(nextMondayDate);
+  const nextSaturdayDate = computeNextSaturday();
+  const nextWeekLabel = formatWeekRange(nextSaturdayDate);
 
-  const addWeek = () => {
-    const newWeekRows = createWeekRows(nextMondayDate);
+  const existingWeekKeys = Array.from(
+    new Set(
+      rows
+        .filter((r) => isValidISODate(r.date))
+        .map((r) => toISODate(getSaturdayOfWeek(r.date))),
+    ),
+  );
+
+  const handleAddWeek = (saturdayDate: Date) => {
+    const newWeekRows = createWeekRows(saturdayDate);
+    const weekKey = toISODate(saturdayDate);
     setRows((prev) => [...prev, ...newWeekRows]);
-    flash('تمت إضافة الأسبوع التالي (الاثنين - الأحد) بنجاح');
+    setSelectedWeekKey(weekKey);
+    flash(`تمت إضافة ${formatWeekRange(saturdayDate)} بنجاح`);
   };
 
   const addRow = () => {
     setRows((prev) => [...prev, emptyRow()]);
   };
 
-  const addRowToWeek = (mondayIso: string) => {
-    const targetDate = isValidISODate(mondayIso) ? mondayIso : toISODate(new Date());
+  const addRowToWeek = (weekIso: string) => {
+    const targetDate = isValidISODate(weekIso) ? weekIso : toISODate(new Date());
     setRows((prev) => [...prev, emptyRow(targetDate)]);
     flash('تمت إضافة جلسة جديدة لهذا الأسبوع');
   };
@@ -311,7 +326,7 @@ export default function App() {
       )}
 
       <Toolbar
-        onAddWeek={addWeek}
+        onAddWeek={() => setIsAddWeekOpen(true)}
         onAddRow={addRow}
         onOpenAddColumn={() => setIsAddColumnOpen(true)}
         onExportCsv={exportCsvFile}
@@ -325,13 +340,15 @@ export default function App() {
         rows={rows}
         columns={columns}
         nextWeekLabel={nextWeekLabel}
+        selectedWeekKey={selectedWeekKey}
+        onSelectWeekKey={setSelectedWeekKey}
         onUpdate={update}
         onDelete={remove}
         onSetLink={(id) => setActiveLinkRowId(id)}
         onDeleteColumn={deleteColumn}
         onAddRowToWeek={addRowToWeek}
         onDuplicateRowDate={duplicateRowDate}
-        onAddWeek={addWeek}
+        onOpenAddWeekModal={() => setIsAddWeekOpen(true)}
       />
 
       <div className="row-count no-print">
@@ -356,6 +373,15 @@ export default function App() {
         isOpen={isAddColumnOpen}
         onAdd={addColumn}
         onClose={() => setIsAddColumnOpen(false)}
+      />
+
+      <AddWeekModal
+        isOpen={isAddWeekOpen}
+        onClose={() => setIsAddWeekOpen(false)}
+        onAddWeek={handleAddWeek}
+        suggestedSaturday={nextSaturdayDate}
+        existingWeekKeys={existingWeekKeys}
+        onSelectExistingWeek={(k) => setSelectedWeekKey(k)}
       />
     </>
   );

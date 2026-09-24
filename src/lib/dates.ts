@@ -51,21 +51,24 @@ export function formatWeekday(iso: string): string {
   return WEEKDAY_NAMES[key];
 }
 
-/** Given a date or ISO string, get the Monday of that week. Week starts on Monday. */
-export function getMondayOfWeek(d: Date | string): Date {
+/** Given a date or ISO string, get the Saturday of that week. Week starts on Saturday. */
+export function getSaturdayOfWeek(d: Date | string): Date {
   const date = typeof d === 'string' ? new Date(`${d}T12:00:00`) : new Date(d);
   const day = date.getDay(); // 0 is Sun, 1 is Mon, ... 6 is Sat
-  const diffToMonday = (day + 6) % 7;
-  const monday = new Date(date);
-  monday.setDate(date.getDate() - diffToMonday);
-  monday.setHours(12, 0, 0, 0);
-  return monday;
+  const diffToSaturday = (day + 1) % 7;
+  const saturday = new Date(date);
+  saturday.setDate(date.getDate() - diffToSaturday);
+  saturday.setHours(12, 0, 0, 0);
+  return saturday;
 }
 
-/** Returns the ISO date (YYYY-MM-DD) of the Monday for the week containing `isoDate`. */
+// Backwards compatibility alias
+export const getMondayOfWeek = getSaturdayOfWeek;
+
+/** Returns the ISO date (YYYY-MM-DD) of the Saturday for the week containing `isoDate`. */
 export function getWeekKey(isoDate: string): string {
   if (!isValidISODate(isoDate)) return 'unassigned';
-  return toISODate(getMondayOfWeek(isoDate));
+  return toISODate(getSaturdayOfWeek(isoDate));
 }
 
 /** Add `days` to a date */
@@ -75,25 +78,26 @@ export function addDays(date: Date, days: number): Date {
   return res;
 }
 
-/** Returns 7 consecutive ISO date strings starting from the given Monday. */
-export function generateWeekDates(monday: Date | string): string[] {
-  const mon = typeof monday === 'string' ? getMondayOfWeek(monday) : getMondayOfWeek(monday);
+/** Returns 7 consecutive ISO date strings starting from the given Saturday (Saturday to Friday). */
+export function generateWeekDates(saturday: Date | string): string[] {
+  const sat = typeof saturday === 'string' ? getSaturdayOfWeek(saturday) : getSaturdayOfWeek(saturday);
   const dates: string[] = [];
   for (let i = 0; i < 7; i++) {
-    dates.push(toISODate(addDays(mon, i)));
+    dates.push(toISODate(addDays(sat, i)));
   }
   return dates;
 }
 
 /**
- * Formats a clean Arabic range for the week starting on Monday:
- * e.g. "الاثنين 21 سبتمبر — الأحد 27 سبتمبر 2026 م"
+ * Formats a clean Arabic range for the week starting on Saturday:
+ * e.g. "الأسبوع: السبت 19 سبتمبر — الجمعة 25 سبتمبر 2026 م"
  */
-export function formatWeekRange(monday: Date | string): string {
-  const mon = typeof monday === 'string' ? getMondayOfWeek(monday) : getMondayOfWeek(monday);
-  const sun = addDays(mon, 6);
-  const monIso = toISODate(mon);
-  const sunIso = toISODate(sun);
-  return `الأسبوع: الاثنين ${formatGregorianShort(monIso)} — الأحد ${formatGregorianShort(sunIso)} م (${formatHijri(monIso)} إلى ${formatHijri(sunIso)})`;
+export function formatWeekRange(saturday: Date | string): string {
+  const sat = typeof saturday === 'string' ? getSaturdayOfWeek(saturday) : getSaturdayOfWeek(saturday);
+  const fri = addDays(sat, 6);
+  const satIso = toISODate(sat);
+  const friIso = toISODate(fri);
+  return `الأسبوع: السبت ${formatGregorianShort(satIso)} — الجمعة ${formatGregorianShort(friIso)} م (${formatHijri(satIso)} إلى ${formatHijri(friIso)})`;
 }
+
 
