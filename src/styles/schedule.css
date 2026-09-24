@@ -928,7 +928,7 @@ td.col-num {
 }
 
 /* ===== Mobile & Touch Screen: Responsive Cards ===== */
-@media (max-width: 768px) {
+@media screen and (max-width: 768px) {
   body {
     padding: 14px 10px 40px;
   }
@@ -1205,74 +1205,109 @@ td.col-num {
 /* ===== Print ===== */
 @page {
   size: A4 landscape;
-  margin: 8mm 10mm;
+  margin: 6mm 8mm;
 }
 @media print {
+  html,
   body {
-    padding: 0;
-    margin: 0;
-    background: #fff;
-    color: #000;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   .no-print {
     display: none !important;
   }
   .masthead {
-    box-shadow: none;
-    border-radius: 6px;
-    padding: 10px 16px;
-    margin: 0 0 10px;
+    box-shadow: none !important;
+    border-radius: 4px !important;
+    padding: 6px 14px !important;
+    margin: 0 0 6px !important;
     background: #12403f !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
   .masthead::before {
-    display: none;
+    display: none !important;
   }
   .masthead h1 {
-    font-size: 1.6rem;
+    font-size: 1.35rem !important;
     color: #fff !important;
-    margin: 0 0 2px;
+    margin: 0 0 1px !important;
+    line-height: 1.2 !important;
   }
   .masthead .divider {
-    display: none;
+    display: none !important;
   }
   .masthead p {
-    font-size: 0.85rem;
+    font-size: 0.75rem !important;
     color: #d1e5e2 !important;
-    margin: 0;
+    margin: 0 !important;
+    line-height: 1.2 !important;
   }
   .schedule-container {
     max-width: none !important;
     width: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
   .table-wrap {
-    box-shadow: none;
-    border-radius: 6px;
-    border: 1px solid #777;
+    box-shadow: none !important;
+    border-radius: 4px !important;
+    border: 1px solid #666 !important;
     overflow: visible !important;
     width: 100% !important;
+    background: transparent !important;
   }
+
+  /* Force standard table display (prevents mobile flex cards leaking into print) */
   table {
+    display: table !important;
     width: 100% !important;
-    font-size: 0.84rem !important;
-    border-collapse: collapse;
+    font-size: 0.8rem !important;
+    border-collapse: collapse !important;
+    table-layout: auto !important;
   }
+  thead {
+    display: table-header-group !important;
+  }
+  tbody {
+    display: table-row-group !important;
+  }
+  tr {
+    display: table-row !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  th,
+  td {
+    display: table-cell !important;
+    vertical-align: middle !important;
+    padding: 3px 6px !important;
+    border: 1px solid #bbb !important;
+    box-sizing: border-box !important;
+  }
+  td::before {
+    content: none !important;
+    display: none !important;
+  }
+
   thead th {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
     background: #12403f !important;
     color: #fff !important;
-    padding: 6px 8px !important;
-    font-size: 0.82rem;
-    border: 1px solid #444;
+    font-size: 0.78rem !important;
+    font-weight: 700 !important;
+    border: 1px solid #333 !important;
+    padding: 4px 6px !important;
   }
-  tbody tr {
-    break-inside: avoid;
-  }
-  /* If multiple weeks are ever printed together, each starts on its own page */
+
+  /* Week separator row */
   tbody tr.week-separator-row ~ tr.week-separator-row {
     page-break-before: always;
     break-before: page;
@@ -1282,8 +1317,8 @@ td.col-num {
     print-color-adjust: exact;
     background: #f7f2e4 !important;
     color: #12403f !important;
-    font-weight: 700;
-    padding: 6px 10px !important;
+    font-weight: 700 !important;
+    padding: 4px 8px !important;
     border: 1.5px solid #b8923f !important;
   }
   .week-badge {
@@ -1291,64 +1326,67 @@ td.col-num {
     color: #fff !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
-    font-size: 0.8rem;
-    padding: 2px 8px;
+    font-size: 0.76rem !important;
+    padding: 1px 6px !important;
+    border-radius: 4px !important;
   }
   .week-range-text {
-    font-size: 0.88rem;
+    font-size: 0.82rem !important;
     color: #12403f !important;
+    font-weight: 700 !important;
   }
-  td {
-    padding: 5px 8px !important;
-    border: 1px solid #ccc !important;
-  }
+
   .col-num {
-    font-weight: 700;
-    width: 28px;
-    text-align: center;
+    display: table-cell !important;
+    font-weight: 700 !important;
+    width: 26px !important;
+    text-align: center !important;
   }
   .link-btn {
-    display: none;
+    display: none !important;
   }
   .link-set {
     background: none !important;
     color: #12403f !important;
-    text-decoration: underline;
-    padding: 0;
-    font-size: 0.8rem;
+    text-decoration: underline !important;
+    padding: 0 !important;
+    font-size: 0.75rem !important;
   }
   .cell-text {
     border: none !important;
     background: transparent !important;
     box-shadow: none !important;
-    padding: 0;
-    resize: none;
-    overflow: visible;
-    font-size: 0.84rem !important;
+    padding: 0 !important;
+    resize: none !important;
+    overflow: visible !important;
+    font-size: 0.78rem !important;
     min-height: unset !important;
-    line-height: 1.35;
+    height: auto !important;
+    line-height: 1.25 !important;
   }
   .date-input-overlay {
-    display: none;
+    display: none !important;
   }
   .date-btn {
     background: none !important;
     box-shadow: none !important;
-    padding: 0;
+    padding: 0 !important;
   }
   .date-hijri {
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: #12403f;
-    display: block;
+    font-size: 0.78rem !important;
+    font-weight: 700 !important;
+    color: #12403f !important;
+    display: block !important;
+    line-height: 1.2 !important;
   }
   .date-greg {
-    font-size: 0.74rem;
-    color: #333;
-    display: block;
+    font-size: 0.7rem !important;
+    color: #333 !important;
+    display: block !important;
+    line-height: 1.15 !important;
   }
   .date-placeholder {
-    color: #999;
+    color: #999 !important;
   }
   .cell-text:empty::before {
     content: ' ';
