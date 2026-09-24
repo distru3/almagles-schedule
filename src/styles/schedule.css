@@ -265,17 +265,109 @@ td.col-num {
   min-height: 44px;
 }
 
+.btn-add-week {
+  background: var(--ink);
+  color: #fff;
+  border: 1.5px solid var(--gold) !important;
+}
+.btn-add-week:hover {
+  box-shadow: 0 4px 10px rgba(18, 64, 63, 0.35);
+}
+.btn-column {
+  background: #fff;
+  color: var(--ink);
+  border: 1.5px solid var(--gold) !important;
+}
+.btn-column:hover {
+  background: var(--parchment);
+}
+
+.custom-th-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.col-del-btn {
+  border: none;
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.col-del-btn:hover {
+  background: var(--danger);
+}
+
+/* ===== Week Separator ===== */
+.week-separator-row td {
+  background: linear-gradient(90deg, #f7f2e4 0%, #fff 100%) !important;
+  border-top: 2px solid var(--gold) !important;
+  border-bottom: 2px solid var(--gold) !important;
+  padding: 10px 16px !important;
+}
+.week-header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.week-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.week-badge {
+  background: var(--ink);
+  color: var(--gold-light);
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+.week-range-text {
+  font-weight: 700;
+  color: var(--ink-deep);
+  font-size: 0.95rem;
+}
+.btn-week-add-session {
+  background: var(--parchment);
+  border: 1px solid var(--gold);
+  color: var(--ink);
+  font-family: 'Tajawal', sans-serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-week-add-session:hover {
+  background: var(--gold);
+  color: #3a2e10;
+}
+
 .date-cell {
+  position: relative;
   padding: 6px 10px;
 }
-.date-input-hidden {
+.date-input-overlay {
   position: absolute;
-  width: 1px;
-  height: 1px;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   opacity: 0;
-  pointer-events: none;
-  border: 0;
-  padding: 0;
+  cursor: pointer;
+  z-index: 2;
+  -webkit-appearance: none;
 }
 .date-btn {
   display: flex;
@@ -288,17 +380,8 @@ td.col-num {
   background: transparent;
   padding: 4px 2px;
   border-radius: 6px;
-  cursor: pointer;
   text-align: right;
-  transition: background 0.15s ease;
-}
-.date-btn:hover {
-  background: #fcfaf3;
-}
-.date-btn:focus {
-  background: #fffdf5;
-  box-shadow: inset 0 0 0 1.5px var(--gold);
-  outline: none;
+  pointer-events: none;
 }
 .date-hijri {
   font-size: 0.95rem;
@@ -368,6 +451,141 @@ td.col-num {
   color: #6e1f1f;
 }
 
+/* ===== Modals ===== */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(18, 64, 63, 0.45);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+.modal-card {
+  background: #fff;
+  border-radius: 14px;
+  max-width: 480px;
+  width: 100%;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.22);
+  border: 1.5px solid var(--gold);
+  overflow: hidden;
+  animation: modalIn 0.2s ease-out;
+}
+@keyframes modalIn {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.modal-header {
+  background: var(--parchment);
+  border-bottom: 1px solid var(--line);
+  padding: 14px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--ink);
+  font-family: 'Amiri', serif;
+}
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: #666;
+  padding: 6px;
+  min-width: 36px;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.modal-field span {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--ink);
+}
+.modal-field input {
+  font-family: 'Tajawal', sans-serif;
+  font-size: 16px;
+  padding: 11px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  outline: none;
+  background: #fdfdfc;
+  box-sizing: border-box;
+}
+.modal-field input:focus {
+  border-color: var(--gold);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(184, 146, 63, 0.2);
+}
+.modal-actions {
+  padding: 14px 20px 20px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.modal-btn-primary {
+  background: var(--ink);
+  color: #fff;
+  border: none;
+  padding: 11px 20px;
+  border-radius: 8px;
+  font-family: 'Tajawal', sans-serif;
+  font-weight: 700;
+  cursor: pointer;
+  flex: 1;
+  min-height: 44px;
+}
+.modal-btn-primary:hover {
+  background: var(--ink-deep);
+}
+.modal-btn-danger {
+  background: #fff;
+  color: var(--danger);
+  border: 1.5px solid var(--danger);
+  padding: 11px 16px;
+  border-radius: 8px;
+  font-family: 'Tajawal', sans-serif;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 44px;
+}
+.modal-btn-cancel {
+  background: #eceae3;
+  color: #444;
+  border: none;
+  padding: 11px 16px;
+  border-radius: 8px;
+  font-family: 'Tajawal', sans-serif;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+
 .row-count {
   max-width: 1200px;
   margin: 14px auto 0;
@@ -376,16 +594,16 @@ td.col-num {
   text-align: left;
 }
 
-/* ===== Mobile: reflow each row into a card ===== */
-@media (max-width: 720px) {
+/* ===== Mobile & Touch Screen: Responsive Cards ===== */
+@media (max-width: 768px) {
   body {
-    padding: 16px 10px 40px;
+    padding: 14px 10px 40px;
   }
   .masthead {
-    padding: 24px 20px;
+    padding: 22px 16px;
   }
   .masthead h1 {
-    font-size: 1.9rem;
+    font-size: 1.8rem;
   }
   .toolbar {
     gap: 8px;
@@ -394,8 +612,19 @@ td.col-num {
   .toolbar label {
     flex: 1 1 calc(50% - 8px);
     justify-content: center;
-    font-size: 0.86rem;
-    padding: 12px 8px;
+    font-size: 0.88rem;
+    padding: 12px 10px;
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+
+  /* Prevent iOS Safari Viewport Auto-Zoom */
+  input,
+  textarea,
+  select,
+  .cell-text,
+  .modal-field input {
+    font-size: 16px !important;
   }
 
   .table-wrap {
@@ -407,7 +636,6 @@ td.col-num {
   table {
     min-width: 0;
   }
-  /* Flatten the table into stacked cards */
   table,
   thead,
   tbody,
@@ -416,83 +644,177 @@ td.col-num {
   td {
     display: block;
     width: 100%;
+    box-sizing: border-box;
   }
   thead {
     display: none;
   }
-  tbody tr {
+
+  /* Mobile Week Separator Banner Card */
+  tr.week-separator-row {
+    background: #fdfaf3 !important;
+    border: 2px solid var(--gold) !important;
+    border-radius: 14px;
+    margin: 22px 0 14px;
+    box-shadow: 0 4px 14px rgba(184, 146, 63, 0.15);
+    padding: 0;
+    overflow: hidden;
+  }
+  tr.week-separator-row td {
+    display: block;
+    border: none !important;
+    padding: 14px 16px;
+    background: transparent !important;
+  }
+  tr.week-separator-row td::before {
+    display: none;
+  }
+  .week-header-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .week-title-wrap {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .week-badge {
+    font-size: 0.85rem;
+    padding: 4px 10px;
+  }
+  .week-range-text {
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+  .btn-week-add-session {
+    width: 100%;
+    padding: 12px;
+    text-align: center;
+    min-height: 44px;
+    font-size: 0.92rem;
+    box-sizing: border-box;
+  }
+
+  /* Mobile Row Card */
+  tbody.week-group-tbody tr:not(.week-separator-row) {
     background: #fff;
-    border: 1px solid var(--line);
+    border: 1.5px solid var(--line);
     border-radius: 12px;
     box-shadow: 0 2px 10px rgba(15, 61, 62, 0.06);
-    padding: 6px 12px 12px;
-    margin: 0 0 14px;
+    padding: 14px;
+    margin-bottom: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
   }
-  tbody tr:nth-child(even) {
-    background: #fff;
-  }
+
+  /* Card Fields */
   td {
-    display: grid;
-    grid-template-columns: 84px 1fr;
-    align-items: center;
-    gap: 6px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 5px;
     border: none !important;
-    padding: 6px 0;
-    font-size: 0.9rem;
+    padding: 4px 0;
   }
   td::before {
     content: attr(data-label);
     color: var(--ink);
     font-weight: 700;
-    font-size: 0.8rem;
+    font-size: 0.84rem;
     line-height: 1.4;
   }
-  td.col-num::before {
-    content: 'رقم';
+  td.col-num {
+    display: none;
   }
-  /* Date cell contents fill the content column */
-  .date-cell {
-    padding: 6px 0;
-  }
-  .date-btn {
+
+  /* Full width comfortable inputs */
+  .cell-text {
     width: 100%;
-    padding: 4px 0;
-    text-align: right;
+    box-sizing: border-box;
+    border: 1.5px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: #fdfcf9;
+    min-height: 44px;
+    line-height: 1.5;
   }
-  /* Links + delete right-aligned in their grid row */
-  td.link-cell .link-holder,
-  td[data-label='حذف'] {
-    justify-self: stretch;
+  .cell-text:focus {
+    background: #fff;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(184, 146, 63, 0.15);
   }
-  td[data-label='حذف'] .del-btn {
-    font-size: 1.3rem;
-    padding: 8px 12px;
-    justify-self: end;
+  .cell-text.area {
+    min-height: 68px;
+  }
+
+  /* Date Cell on Touch Screen */
+  .date-cell {
+    background: #faf8f2;
+    border: 1.5px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    min-height: 48px;
+    box-sizing: border-box;
+  }
+  .date-hijri {
+    font-size: 1rem;
+  }
+  .date-greg {
+    font-size: 0.82rem;
+  }
+
+  /* Link & Delete Buttons */
+  td.link-cell,
+  td.col-del-td {
+    margin-top: 4px;
   }
   .link-btn,
   .link-set {
-    justify-self: start;
+    min-height: 44px;
+    width: 100%;
+    justify-content: center;
+    display: flex;
+    align-items: center;
+    font-size: 0.9rem;
+    box-sizing: border-box;
   }
-  /* Empty state spans the card cleanly */
+  .del-btn {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 8px;
+    background: #fdecea;
+    color: var(--danger);
+    border: 1.5px solid #f0c2bf;
+    font-size: 0.95rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .del-btn::after {
+    content: ' حذف هذه الجلسة';
+    font-size: 0.88rem;
+  }
+
+  /* Empty state */
   .empty-row td {
     display: block;
     text-align: center;
-    padding: 20px;
+    padding: 24px;
     font-style: italic;
   }
   .empty-row td::before {
     content: none;
-  }
-  /* The internal scroll rule must not apply on mobile */
-  .table-wrap {
-    overflow: visible;
   }
 }
 
 /* ===== Print ===== */
 @page {
   size: A4 landscape;
-  margin: 12mm;
+  margin: 10mm;
 }
 @media print {
   body {
@@ -505,6 +827,7 @@ td.col-num {
   .masthead {
     box-shadow: none;
     border-radius: 0;
+    padding: 14px 20px;
   }
   .masthead::before {
     display: none;
@@ -521,6 +844,12 @@ td.col-num {
   tbody tr {
     break-inside: avoid;
   }
+  .week-separator-row td {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background: #f7f2e4 !important;
+    font-weight: 700;
+  }
   .link-btn {
     display: none;
   }
@@ -530,9 +859,7 @@ td.col-num {
     text-decoration: underline;
     padding: 0;
   }
-  /* text fields must print as plain text without browser chrome */
-  .cell-text,
-  .date-input-hidden {
+  .cell-text {
     border: none !important;
     background: transparent !important;
     box-shadow: none !important;
@@ -540,11 +867,13 @@ td.col-num {
     resize: none;
     overflow: visible;
   }
+  .date-input-overlay {
+    display: none;
+  }
   .date-btn {
     background: none !important;
     box-shadow: none !important;
     padding: 0;
-    cursor: default;
   }
   .date-hijri {
     font-size: 0.95rem;
@@ -562,3 +891,4 @@ td.col-num {
     content: ' ';
   }
 }
+

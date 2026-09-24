@@ -1,12 +1,14 @@
-import { useRef } from 'react';
-import type { ScheduleRow } from '../types';
-import { formatHijri, formatGregorianShort, formatWeekday } from '../lib/dates';
+import type { ScheduleRow, CustomColumn } from '../types';
+import { formatHijri, formatGregorianShort, formatWeekday, getWeekKey, formatWeekRange } from '../lib/dates';
 
 interface Props {
   rows: ScheduleRow[];
+  columns: CustomColumn[];
   onUpdate: (id: string, patch: Partial<ScheduleRow>) => void;
   onDelete: (id: string) => void;
   onSetLink: (id: string) => void;
+  onDeleteColumn: (colId: string) => void;
+  onAddRowToWeek: (mondayIso: string) => void;
 }
 
 function LinkCell({ row, onSetLink }: { row: ScheduleRow; onSetLink: () => void }) {
@@ -32,40 +34,58 @@ function LinkCell({ row, onSetLink }: { row: ScheduleRow; onSetLink: () => void 
 }
 
 function DateCell({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const pickRef = useRef<HTMLInputElement>(null);
-  const openPicker = () => {
-    const el = pickRef.current;
-    if (!el) return;
-    if (typeof (el as HTMLInputElement & { showPicker?: () => void }).showPicker === 'function') {
-      (el as HTMLInputElement & { showPicker: () => void }).showPicker();
-    } else {
-      el.click();
-    }
-  };
   return (
     <div className="date-cell">
       <input
-        ref={pickRef}
         type="date"
-        className="date-input-hidden"
+        className="date-input-overlay"
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        title="اضغط لاختيار التاريخ"
       />
-      <button type="button" className="date-btn" onClick={openPicker} title="اختر التاريخ">
+      <div className="date-btn" aria-hidden="true">
         {value ? (
           <>
             <span className="date-hijri">{formatHijri(value)}</span>
-            <span className="date-greg">{formatWeekday(value)} — {formatGregorianShort(value)} م</span>
+            <span className="date-greg">
+              {formatWeekday(value)} — {formatGregorianShort(value)} م
+            </span>
           </>
         ) : (
-          <span className="date-placeholder">اختر التاريخ</span>
+          <span className="date-placeholder">📅 اضغط لتحديد التاريخ</span>
         )}
-      </button>
+      </div>
     </div>
   );
 }
 
-export default function ScheduleTable({ rows, onUpdate, onDelete, onSetLink }: Props) {
+export default function ScheduleTable({
+  rows,
+  columns,
+  onUpdate,
+  onDelete,
+  onSetLink,
+  onDeleteColumn,
+  onAddRowToWeek,
+}: Props) {
+  // Group rows by week (Monday key)
+  const weekMap = new Map<string, ScheduleRow[]>();
+  for (const row of rows) {
+    const key = getWeekKey(row.date);
+    if (!weekMap.has(key)) weekMap.set(key, []);
+    weekMap.get(key)!.push(row);
+  }
+
+  // Sort week keys chronologically
+  const sortedKeys = Array.from(weekMap.keys()).sort((a, b) => {
+    if (a === 'unassigned') return 1;
+    if (b === 'unassigned') return -1;
+    return a.localeCompare(b);
+  });
+
+  const totalCols = 8 + columns.length;
+  let runningIndex = 0;
+
   return (
     <div className="table-wrap">
       <table>
@@ -77,6 +97,21 @@ export default function ScheduleTable({ rows, onUpdate, onDelete, onSetLink }: P
             <th className="col-section">القسم</th>
             <th className="col-title">العنوان</th>
             <th className="col-notes">ملاحظات</th>
+            {columns.map((col) => (
+              <th key={col.id} className="col-custom">
+                <div className="custom-th-content">
+                  <span>{col.label}</span>
+                  <button
+                    type="button"
+                    className="col-del-btn no-print"
+                    onClick={() => onDeleteColumn(col.id)}
+                    title={`حذف عمود «${col.label}»`}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </th>
+            ))}
             <th className="col-link">الرابط</th>
             <th className="col-del no-print"></th>
           </tr>
@@ -84,65 +119,119 @@ export default function ScheduleTable({ rows, onUpdate, onDelete, onSetLink }: P
         <tbody>
           {rows.length === 0 && (
             <tr className="empty-row">
-              <td data-label="" colSpan={8} style={{ textAlign: 'center', color: '#a8a29e', padding: '28px', fontStyle: 'italic' }}>
-                لا توجد صفوف بعد — اضغط «➕ إضافة صف» أو استورد ملف CSV.
+              <td
+                data-label=""
+                colSpan={totalCols}
+                style={{ textAlign: 'center', color: '#a8a29e', padding: '28px', fontStyle: 'italic' }}
+              >
+                لا توجد صفوف بعد — اضغط «➕ إضافة أسبوع» أو «➕ إضافة صف» للبدء.
               </td>
             </tr>
           )}
-          {rows.map((row, i) => (
-            <tr key={row.id}>
-              <td className="col-num" data-label="رقم">{i + 1}</td>
-              <td className="date-cell" data-label="التاريخ">
-                <DateCell value={row.date} onChange={(v) => onUpdate(row.id, { date: v })} />
-              </td>
-              <td data-label="الوقت">
-                <input
-                  className="cell-text"
-                  value={row.time}
-                  placeholder="مثال: 10:00"
-                  onChange={(e) => onUpdate(row.id, { time: e.target.value })}
-                />
-              </td>
-              <td data-label="القسم">
-                <input
-                  className="cell-text"
-                  value={row.section}
-                  placeholder="القسم…"
-                  onChange={(e) => onUpdate(row.id, { section: e.target.value })}
-                />
-              </td>
-              <td data-label="العنوان">
-                <textarea
-                  className="cell-text"
-                  value={row.title}
-                  placeholder="عنوان الجلسة…"
-                  rows={1}
-                  onChange={(e) => onUpdate(row.id, { title: e.target.value })}
-                />
-              </td>
-              <td data-label="ملاحظات">
-                <textarea
-                  className="cell-text area"
-                  value={row.notes}
-                  placeholder="ملاحظات أو فوائد…"
-                  rows={2}
-                  onChange={(e) => onUpdate(row.id, { notes: e.target.value })}
-                />
-              </td>
-              <td className="link-cell" data-label="الرابط">
-                <LinkCell row={row} onSetLink={() => onSetLink(row.id)} />
-              </td>
-              <td className="no-print" data-label="حذف" style={{ textAlign: 'center' }}>
-                <button
-                  className="del-btn"
-                  onClick={() => onDelete(row.id)}
-                  title="حذف الصف"
-                >
-                  🗑
-                </button>
-              </td>
-            </tr>
-          ))}
+
+          {sortedKeys.map((weekKey, weekIdx) => {
+            const weekRows = weekMap.get(weekKey) || [];
+            return (
+              <tbody key={`week-group-${weekKey}`} className="week-group-tbody">
+                <tr className="week-separator-row">
+                  <td colSpan={totalCols} data-label="الأسبوع">
+                    <div className="week-header-content">
+                      <div className="week-title-wrap">
+                        <span className="week-badge">الأسبوع {weekIdx + 1}</span>
+                        <span className="week-range-text">
+                          {weekKey !== 'unassigned' ? formatWeekRange(weekKey) : 'جلسات غير محددة التاريخ'}
+                        </span>
+                      </div>
+                      <div className="week-actions no-print">
+                        {weekKey !== 'unassigned' && (
+                          <button
+                            type="button"
+                            className="btn-week-add-session"
+                            onClick={() => onAddRowToWeek(weekKey)}
+                            title="إضافة جلسة لهذا الأسبوع"
+                          >
+                            ➕ إضافة جلسة بهذا الأسبوع
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+
+                {weekRows.map((row) => {
+                  runningIndex++;
+                  const rowIndex = runningIndex;
+                  return (
+                    <tr key={row.id}>
+                      <td className="col-num" data-label="رقم">
+                        {rowIndex}
+                      </td>
+                      <td className="date-cell" data-label="التاريخ">
+                        <DateCell value={row.date} onChange={(v) => onUpdate(row.id, { date: v })} />
+                      </td>
+                      <td data-label="الوقت">
+                        <input
+                          className="cell-text"
+                          value={row.time}
+                          placeholder="مثال: 10:00"
+                          onChange={(e) => onUpdate(row.id, { time: e.target.value })}
+                        />
+                      </td>
+                      <td data-label="القسم">
+                        <input
+                          className="cell-text"
+                          value={row.section}
+                          placeholder="القسم…"
+                          onChange={(e) => onUpdate(row.id, { section: e.target.value })}
+                        />
+                      </td>
+                      <td data-label="العنوان">
+                        <textarea
+                          className="cell-text"
+                          value={row.title}
+                          placeholder="عنوان الجلسة…"
+                          rows={1}
+                          onChange={(e) => onUpdate(row.id, { title: e.target.value })}
+                        />
+                      </td>
+                      <td data-label="ملاحظات">
+                        <textarea
+                          className="cell-text area"
+                          value={row.notes}
+                          placeholder="ملاحظات أو فوائد…"
+                          rows={2}
+                          onChange={(e) => onUpdate(row.id, { notes: e.target.value })}
+                        />
+                      </td>
+
+                      {columns.map((col) => (
+                        <td key={col.id} data-label={col.label}>
+                          <input
+                            className="cell-text"
+                            value={row.customValues?.[col.id] || ''}
+                            placeholder={`${col.label}…`}
+                            onChange={(e) => {
+                              const next = { ...(row.customValues || {}), [col.id]: e.target.value };
+                              onUpdate(row.id, { customValues: next });
+                            }}
+                          />
+                        </td>
+                      ))}
+
+                      <td className="link-cell" data-label="الرابط">
+                        <LinkCell row={row} onSetLink={() => onSetLink(row.id)} />
+                      </td>
+                      <td className="no-print col-del-td" data-label="حذف" style={{ textAlign: 'center' }}>
+                        <button className="del-btn" onClick={() => onDelete(row.id)} title="حذف الصف">
+                          🗑
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            );
+          })}
         </tbody>
       </table>
     </div>

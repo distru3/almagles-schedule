@@ -1,28 +1,24 @@
-import type { ScheduleRow } from '../types';
-import { CSV_HEADERS } from '../types';
+import type { ScheduleRow, CustomColumn } from '../types';
+import { BASE_CSV_HEADERS } from '../types';
 
-function newId(): string {
+export function newId(): string {
   return typeof crypto !== 'undefined' && crypto.randomUUID
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-export function emptyRow(): ScheduleRow {
-  return { id: newId(), date: '', time: '', section: '', title: '', notes: '', linkUrl: '', linkLabel: '' };
-}
-
-export function csvRenderRow(row: ScheduleRow, headers: string[]): string {
-  return headers
-    .map((h) => {
-      if (h === 'date') return row.date;
-      if (h === 'time') return row.time;
-      if (h === 'section') return row.section;
-      if (h === 'title') return row.title;
-      if (h === 'notes') return row.notes;
-      if (h === 'link') return row.linkUrl;
-      return '';
-    })
-    .join(',');
+export function emptyRow(date = ''): ScheduleRow {
+  return {
+    id: newId(),
+    date,
+    time: '',
+    section: '',
+    title: '',
+    notes: '',
+    linkUrl: '',
+    linkLabel: '',
+    customValues: {},
+  };
 }
 
 export function csvEscape(value: string): string {
@@ -32,26 +28,28 @@ export function csvEscape(value: string): string {
   return value;
 }
 
-export function exportCsv(rows: ScheduleRow[]): string {
-  const lines = [CSV_HEADERS.map(csvEscape).join(',')];
+export function exportCsv(rows: ScheduleRow[], customColumns: CustomColumn[] = []): string {
+  const headers = [...BASE_CSV_HEADERS, ...customColumns.map((c) => c.label)];
+  const lines = [headers.map(csvEscape).join(',')];
+
   for (const row of rows) {
-    lines.push(
-      [
-        csvEscape(row.date),
-        csvEscape(row.time),
-        csvEscape(row.section),
-        csvEscape(row.title),
-        csvEscape(row.notes),
-        csvEscape(row.linkUrl),
-      ].join(','),
-    );
+    const rowValues = [
+      csvEscape(row.date),
+      csvEscape(row.time),
+      csvEscape(row.section),
+      csvEscape(row.title),
+      csvEscape(row.notes),
+      csvEscape(row.linkUrl),
+      ...customColumns.map((c) => csvEscape(row.customValues?.[c.id] || '')),
+    ];
+    lines.push(rowValues.join(','));
   }
   // UTF-8 BOM so Excel renders Arabic correctly.
   return '\ufeff' + lines.join('\n') + '\n';
 }
 
-export function downloadCsv(rows: ScheduleRow[], filename: string): void {
-  const blob = new Blob([exportCsv(rows)], { type: 'text/csv;charset=utf-8;' });
+export function downloadCsv(rows: ScheduleRow[], filename: string, customColumns: CustomColumn[] = []): void {
+  const blob = new Blob([exportCsv(rows, customColumns)], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -62,27 +60,41 @@ export function downloadCsv(rows: ScheduleRow[], filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-export function downloadTemplate(): void {
+export function downloadTemplate(customColumns: CustomColumn[] = []): void {
   const example: ScheduleRow[] = [
-    { ...emptyRow(), date: '2026-08-22', time: '10:00', section: 'مفاهيم شرعية', title: 'مثال: أضف عنوان الجلسة', notes: 'مثال: فوائد وملاحظات', linkUrl: 'https://example.com', linkLabel: 'فتح الرابط' },
+    {
+      ...emptyRow('2026-08-22'),
+      time: '10:00',
+      section: 'مفاهيم شرعية',
+      title: 'مثال: أضف عنوان الجلسة',
+      notes: 'مثال: فوائد وملاحظات',
+      linkUrl: 'https://example.com',
+      linkLabel: 'فتح الرابط',
+      customValues: customColumns.reduce<Record<string, string>>((acc, col) => {
+        acc[col.id] = 'مثال';
+        return acc;
+      }, {}),
+    },
   ];
-  downloadCsv(example, 'قالب_الجدول.csv');
+  downloadCsv(example, 'قالب_الجدول.csv', customColumns);
 }
 
 export interface ParseResult {
   rows: ScheduleRow[];
   skipped: number[];
+  detectedColumns: CustomColumn[];
 }
 
 /**
  * RFC 4180 CSV parser (handles quoted fields containing commas, quotes,
- * and newlines). Expects the exact header: date,time,section,title,notes,link.
+ * and newlines). Expects at least: date,time,section,title,notes,link.
+ * Any additional headers are automatically parsed as custom columns.
  */
-export function parseCsv(text: string): ParseResult {
+export function parseCsv(text: string, existingColumns: CustomColumn[] = []): ParseResult {
   // Strip BOM and normalize line endings.
   const src = text.replace(/^\ufeff/, '').replace(/\r\n?/g, '\n');
 
-  const rows: string[][] = [];
+  const rawRows: string[][] = [];
   let i = 0;
   let field = '';
   let row: string[] = [];
@@ -94,7 +106,7 @@ export function parseCsv(text: string): ParseResult {
   };
   const pushRow = () => {
     pushField();
-    rows.push(row);
+    rawRows.push(row);
     row = [];
   };
 
@@ -135,19 +147,40 @@ export function parseCsv(text: string): ParseResult {
   }
   if (field !== '' || row.length > 0) pushRow();
 
-  if (rows.length === 0) {
+  if (rawRows.length === 0) {
     throw new Error('الملف فارغ');
   }
-  const header = rows[0].map((h) => h.trim().toLowerCase());
-  const expected = [...CSV_HEADERS];
-  if (header.join(',') !== expected.join(',')) {
-    throw new Error('صيغة الملف غير صحيحة — تأكد أن السطر الأول يحمل رأس الأعمدة: date,time,section,title,notes,link');
+
+  const rawHeader = rawRows[0].map((h) => h.trim());
+  const baseHeadersCount = BASE_CSV_HEADERS.length;
+  const headerLower = rawHeader.slice(0, baseHeadersCount).map((h) => h.toLowerCase());
+
+  if (headerLower.join(',') !== BASE_CSV_HEADERS.join(',')) {
+    throw new Error(
+      'صيغة الملف غير صحيحة — يجب أن يبدأ السطر الأول بالأعمدة الأساسية: date,time,section,title,notes,link',
+    );
+  }
+
+  // Detect custom columns from header beyond base headers
+  const detectedColumns: CustomColumn[] = [...existingColumns];
+  const customColIndices: { index: number; colId: string }[] = [];
+
+  for (let c = baseHeadersCount; c < rawHeader.length; c++) {
+    const label = rawHeader[c];
+    if (!label) continue;
+    let match = detectedColumns.find((dc) => dc.label.toLowerCase() === label.toLowerCase());
+    if (!match) {
+      match = { id: `col_${newId().slice(0, 8)}`, label };
+      detectedColumns.push(match);
+    }
+    customColIndices.push({ index: c, colId: match.id });
   }
 
   const out: ScheduleRow[] = [];
   const skipped: number[] = [];
-  for (let r = 1; r < rows.length; r++) {
-    const cells = rows[r];
+
+  for (let r = 1; r < rawRows.length; r++) {
+    const cells = rawRows[r];
     const get = (idx: number) => (cells[idx] ?? '').trim();
     const date = get(0);
     if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -157,6 +190,13 @@ export function parseCsv(text: string): ParseResult {
     if (cells.every((c) => c.trim() === '')) {
       continue;
     }
+
+    const customValues: Record<string, string> = {};
+    for (const { index, colId } of customColIndices) {
+      const val = get(index);
+      if (val) customValues[colId] = val;
+    }
+
     out.push({
       id: newId(),
       date,
@@ -166,7 +206,10 @@ export function parseCsv(text: string): ParseResult {
       notes: get(4),
       linkUrl: get(5),
       linkLabel: get(5) ? 'فتح الرابط' : '',
+      customValues,
     });
   }
-  return { rows: out, skipped };
+
+  return { rows: out, skipped, detectedColumns };
 }
+

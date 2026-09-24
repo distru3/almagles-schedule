@@ -1,22 +1,40 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ScheduleRow } from './types';
+import type { ScheduleRow, CustomColumn } from './types';
 import { emptyRow, parseCsv, downloadCsv, downloadTemplate } from './lib/csv';
-import { loadRows, saveRows } from './lib/storage';
+import { loadRows, saveRows, loadColumns, saveColumns } from './lib/storage';
 import { isFirebaseConfigured, database } from './lib/firebase';
 import { fetchScheduleOnce, pushSchedule, listenToSchedule } from './lib/sync';
+import { getMondayOfWeek, generateWeekDates, addDays, isValidISODate, toISODate } from './lib/dates';
 import Masthead from './components/Masthead';
 import HelpInstructions from './components/HelpInstructions';
 import Toolbar from './components/Toolbar';
 import ScheduleTable from './components/ScheduleTable';
+import LinkModal from './components/LinkModal';
+import AddColumnModal from './components/AddColumnModal';
 
 type SyncStatus = 'connecting' | 'live' | 'local';
 
+function createWeekRows(mondayDate: Date): ScheduleRow[] {
+  const dates = generateWeekDates(mondayDate);
+  return dates.map((d) => emptyRow(d));
+}
+
 export default function App() {
-  const [rows, setRows] = useState<ScheduleRow[]>(() => loadRows());
+  const [rows, setRows] = useState<ScheduleRow[]>(() => {
+    const loaded = loadRows();
+    if (loaded.length > 0) return loaded;
+    // Baked in current week (Monday to Sunday) by default
+    return createWeekRows(getMondayOfWeek(new Date()));
+  });
+
+  const [columns, setColumns] = useState<CustomColumn[]>(() => loadColumns());
   const [message, setMessage] = useState<{ text: string; kind: 'ok' | 'err' } | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(
     isFirebaseConfigured && database ? 'connecting' : 'local',
   );
+
+  const [activeLinkRowId, setActiveLinkRowId] = useState<string | null>(null);
+  const [isAddColumnOpen, setIsAddColumnOpen] = useState(false);
 
   const skipPush = useRef(false);
   const remoteApplied = useRef(false);
@@ -33,8 +51,17 @@ export default function App() {
       if (remote !== null) {
         skipPush.current = true;
         remoteApplied.current = true;
-        setRows(remote);
-        saveRows(remote);
+
+        let nextRows = remote.rows;
+        // If remote has no rows at all, bake in the current week
+        if (nextRows.length === 0) {
+          nextRows = createWeekRows(getMondayOfWeek(new Date()));
+        }
+        setRows(nextRows);
+        saveRows(nextRows);
+
+        setColumns(remote.columns);
+        saveColumns(remote.columns);
       } else {
         remoteApplied.current = true;
       }
@@ -45,8 +72,10 @@ export default function App() {
       if (!active) return;
       skipPush.current = true;
       remoteApplied.current = true;
-      setRows(remote);
-      saveRows(remote);
+      setRows(remote.rows);
+      saveRows(remote.rows);
+      setColumns(remote.columns);
+      saveColumns(remote.columns);
       if (!syncStatusRef.live) {
         syncStatusRef.live = true;
         setSyncStatus('live');
@@ -59,7 +88,7 @@ export default function App() {
     };
   }, []);
 
-  // Debounced push to Firebase on local edits.
+  // Debounced push to Firebase on local edits (both rows and custom columns)
   useEffect(() => {
     if (skipPush.current) {
       skipPush.current = false;
@@ -69,14 +98,14 @@ export default function App() {
 
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(async () => {
-      const ok = await pushSchedule(rows);
+      const ok = await pushSchedule(rows, columns);
       setSyncStatus(ok ? 'live' : 'local');
     }, 700);
 
     return () => {
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
     };
-  }, [rows]);
+  }, [rows, columns]);
 
   const flash = (text: string, kind: 'ok' | 'err' = 'ok') => {
     setMessage({ text, kind });
@@ -92,43 +121,92 @@ export default function App() {
     setRows((prev) => prev.filter((r) => r.id !== id));
   };
 
-  const setLink = (id: string) => {
-    const row = rows.find((r) => r.id === id);
-    if (!row) return;
-    const url = window.prompt('ألصق الرابط هنا:', row.linkUrl || 'https://');
-    if (url === null) return;
-    if (url.trim() === '') {
-      update(id, { linkUrl: '', linkLabel: '' });
-      return;
+  const addWeek = () => {
+    // Find the latest valid date in rows to add the next week
+    let latestMonday: Date | null = null;
+    for (const r of rows) {
+      if (isValidISODate(r.date)) {
+        const mon = getMondayOfWeek(r.date);
+        if (!latestMonday || mon.getTime() > latestMonday.getTime()) {
+          latestMonday = mon;
+        }
+      }
     }
-    const label = window.prompt('عنوان يظهر للرابط:', row.linkLabel || 'فتح الرابط');
-    update(id, { linkUrl: url.trim(), linkLabel: label && label.trim() ? label.trim() : 'فتح الرابط' });
+
+    const nextMonday = latestMonday ? addDays(latestMonday, 7) : getMondayOfWeek(new Date());
+    const newWeekRows = createWeekRows(nextMonday);
+    setRows((prev) => [...prev, ...newWeekRows]);
+    flash('تمت إضافة الأسبوع التالي (الاثنين - الأحد) بنجاح');
   };
 
   const addRow = () => {
     setRows((prev) => [...prev, emptyRow()]);
   };
 
-  const exportCsv = () => {
+  const addRowToWeek = (mondayIso: string) => {
+    // Adds a new session row pre-filled with the Monday date
+    const targetDate = isValidISODate(mondayIso) ? mondayIso : toISODate(new Date());
+    setRows((prev) => [...prev, emptyRow(targetDate)]);
+    flash('تمت إضافة جلسة جديدة لهذا الأسبوع');
+  };
+
+  const addColumn = (label: string) => {
+    const id = `col_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+    const newCol: CustomColumn = { id, label };
+    setColumns((prev) => {
+      const updated = [...prev, newCol];
+      saveColumns(updated);
+      return updated;
+    });
+    flash(`تمت إضافة عمود «${label}»`);
+  };
+
+  const deleteColumn = (colId: string) => {
+    const col = columns.find((c) => c.id === colId);
+    if (!window.confirm(`هل أنت متأكد من حذف عمود «${col?.label || ''}»؟`)) return;
+    setColumns((prev) => {
+      const updated = prev.filter((c) => c.id !== colId);
+      saveColumns(updated);
+      return updated;
+    });
+    // Remove custom value entries from all rows
+    setRows((prev) =>
+      prev.map((r) => {
+        if (!r.customValues || !r.customValues[colId]) return r;
+        const next = { ...r.customValues };
+        delete next[colId];
+        return { ...r, customValues: next };
+      }),
+    );
+    flash('تم حذف العمود');
+  };
+
+  const exportCsvFile = () => {
     if (rows.length === 0) {
       flash('لا توجد صفوف للتصدير', 'err');
       return;
     }
-    downloadCsv(rows, 'الجدول_الأسبوعي.csv');
+    downloadCsv(rows, 'الجدول_الأسبوعي.csv', columns);
     flash('تم تنزيل ملف CSV');
   };
 
   const template = () => {
-    downloadTemplate();
+    downloadTemplate(columns);
     flash('تم تنزيل قالب CSV');
   };
 
-  const importCsv = async (file: File) => {
+  const importCsvFile = async (file: File) => {
     const text = await file.text();
     try {
-      const { rows: parsed, skipped } = parseCsv(text);
+      const { rows: parsed, skipped, detectedColumns } = parseCsv(text, columns);
       if (!window.confirm('سيتم استبدال الجدول الحالي بالمحتوى المستورد. متابعة؟')) return;
+
       setRows(parsed);
+      saveRows(parsed);
+
+      setColumns(detectedColumns);
+      saveColumns(detectedColumns);
+
       if (skipped.length) {
         flash(`تم الاستيراد — تم تخطي ${skipped.length} صف (أرقام: ${skipped.join(', ')})`, 'err');
       } else {
@@ -142,8 +220,11 @@ export default function App() {
   const clear = () => {
     if (!window.confirm('سيتم مسح كل صفوف الجدول لجميع الزوار. هل أنت متأكد؟')) return;
     setRows([]);
+    saveRows([]);
     flash('تم مسح الجدول');
   };
+
+  const activeLinkRow = rows.find((r) => r.id === activeLinkRowId);
 
   return (
     <>
@@ -204,18 +285,49 @@ export default function App() {
       )}
 
       <Toolbar
+        onAddWeek={addWeek}
         onAddRow={addRow}
-        onExportCsv={exportCsv}
-        onImportCsv={importCsv}
+        onOpenAddColumn={() => setIsAddColumnOpen(true)}
+        onExportCsv={exportCsvFile}
+        onImportCsv={importCsvFile}
         onTemplate={template}
         onPrint={() => window.print()}
         onClear={clear}
       />
-      <ScheduleTable rows={rows} onUpdate={update} onDelete={remove} onSetLink={setLink} />
+
+      <ScheduleTable
+        rows={rows}
+        columns={columns}
+        onUpdate={update}
+        onDelete={remove}
+        onSetLink={(id) => setActiveLinkRowId(id)}
+        onDeleteColumn={deleteColumn}
+        onAddRowToWeek={addRowToWeek}
+      />
+
       <div className="row-count no-print">
         عدد صفوف الجدول: {rows.length}
         {syncStatus === 'live' && <span style={{ marginInlineStart: 12, color: '#0b6b3f' }}>· متزامن مباشرة ✓</span>}
       </div>
+
+      <LinkModal
+        isOpen={activeLinkRowId !== null}
+        initialUrl={activeLinkRow?.linkUrl || ''}
+        initialLabel={activeLinkRow?.linkLabel || ''}
+        onSave={(url, label) => {
+          if (activeLinkRowId) {
+            update(activeLinkRowId, { linkUrl: url, linkLabel: label });
+          }
+          setActiveLinkRowId(null);
+        }}
+        onClose={() => setActiveLinkRowId(null)}
+      />
+
+      <AddColumnModal
+        isOpen={isAddColumnOpen}
+        onAdd={addColumn}
+        onClose={() => setIsAddColumnOpen(false)}
+      />
     </>
   );
 }

@@ -1,7 +1,9 @@
 import { useRef } from 'react';
 
 interface Props {
+  onAddWeek: () => void;
   onAddRow: () => void;
+  onOpenAddColumn: () => void;
   onExportCsv: () => void;
   onImportCsv: (file: File) => void;
   onTemplate: () => void;
@@ -9,12 +11,27 @@ interface Props {
   onClear: () => void;
 }
 
-export default function Toolbar({ onAddRow, onExportCsv, onImportCsv, onTemplate, onPrint, onClear }: Props) {
+export default function Toolbar({
+  onAddWeek,
+  onAddRow,
+  onOpenAddColumn,
+  onExportCsv,
+  onImportCsv,
+  onTemplate,
+  onPrint,
+  onClear,
+}: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   return (
     <div className="toolbar no-print">
-      <button className="btn-add" onClick={onAddRow}>
+      <button className="btn-add-week" onClick={onAddWeek} title="تجهيز أسبوع كامل (الاثنين - الأحد) بتواريخه الحقيقية">
+        📅 إضافة أسبوع
+      </button>
+      <button className="btn-add" onClick={onAddRow} title="إضافة صف/جلسة منفردة">
         ➕ إضافة صف
+      </button>
+      <button className="btn-column" onClick={onOpenAddColumn} title="إضافة عمود مخصص للجدول">
+        ➕ إضافة عمود
       </button>
       <button className="btn-save" onClick={onExportCsv}>
         ⬇ تصدير CSV
