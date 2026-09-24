@@ -7,6 +7,7 @@ const NODE = 'schedule';
 export interface ScheduleSyncData {
   rows: ScheduleRow[];
   columns: CustomColumn[];
+  updatedAt: number;
 }
 
 interface SchedulePayload {
@@ -78,7 +79,9 @@ export function extractSchedule(payload: unknown): ScheduleSyncData | null {
   const rows = extractRows(payload);
   if (rows === null) return null;
   const columns = extractColumns(payload);
-  return { rows, columns };
+  const rawUpdatedAt = (payload as { updatedAt?: unknown }).updatedAt;
+  const updatedAt = typeof rawUpdatedAt === 'number' ? rawUpdatedAt : 0;
+  return { rows, columns, updatedAt };
 }
 
 /** Fetch the current schedule once (used for the initial hydrate). */
@@ -86,7 +89,7 @@ export async function fetchScheduleOnce(): Promise<ScheduleSyncData | null> {
   if (!isFirebaseConfigured || !database) return null;
   try {
     const snap = await get(ref(database, NODE));
-    if (!snap.exists()) return { rows: [], columns: [] };
+    if (!snap.exists()) return { rows: [], columns: [], updatedAt: 0 };
     return extractSchedule(snap.val());
   } catch (err) {
     console.error('[sync] fetch error', err);
@@ -95,15 +98,19 @@ export async function fetchScheduleOnce(): Promise<ScheduleSyncData | null> {
 }
 
 /** Push the full rows array and custom columns to the shared node. */
-export async function pushSchedule(rows: ScheduleRow[], columns: CustomColumn[] = []): Promise<boolean> {
-  if (!isFirebaseConfigured || !database) return false;
+export async function pushSchedule(
+  rows: ScheduleRow[],
+  columns: CustomColumn[] = [],
+  timestamp = Date.now(),
+): Promise<number | null> {
+  if (!isFirebaseConfigured || !database) return null;
   try {
-    const payload: SchedulePayload = { updatedAt: Date.now(), rows, columns };
+    const payload: SchedulePayload = { updatedAt: timestamp, rows, columns };
     await set(ref(database, NODE), payload);
-    return true;
+    return timestamp;
   } catch (err) {
     console.error('[sync] push error', err);
-    return false;
+    return null;
   }
 }
 
@@ -118,7 +125,7 @@ export function listenToSchedule(onData: (data: ScheduleSyncData) => void): Unsu
     ref(db, NODE),
     (snap) => {
       if (!snap.exists()) {
-        onData({ rows: [], columns: [] });
+        onData({ rows: [], columns: [], updatedAt: 0 });
         return;
       }
       const data = extractSchedule(snap.val());

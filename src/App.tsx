@@ -4,7 +4,7 @@ import { emptyRow, parseCsv, downloadCsv, downloadTemplate } from './lib/csv';
 import { loadRows, saveRows, loadColumns, saveColumns } from './lib/storage';
 import { isFirebaseConfigured, database } from './lib/firebase';
 import { fetchScheduleOnce, pushSchedule, listenToSchedule } from './lib/sync';
-import { getMondayOfWeek, generateWeekDates, addDays, isValidISODate, toISODate } from './lib/dates';
+import { getMondayOfWeek, generateWeekDates, addDays, isValidISODate, toISODate, formatWeekRange } from './lib/dates';
 import Masthead from './components/Masthead';
 import HelpInstructions from './components/HelpInstructions';
 import Toolbar from './components/Toolbar';
@@ -19,12 +19,17 @@ function createWeekRows(mondayDate: Date): ScheduleRow[] {
   return dates.map((d) => emptyRow(d));
 }
 
+function createInitialWeeks(): ScheduleRow[] {
+  const thisMonday = getMondayOfWeek(new Date());
+  const nextMonday = addDays(thisMonday, 7);
+  return [...createWeekRows(thisMonday), ...createWeekRows(nextMonday)];
+}
+
 export default function App() {
   const [rows, setRows] = useState<ScheduleRow[]>(() => {
     const loaded = loadRows();
     if (loaded.length > 0) return loaded;
-    // Baked in current week (Monday to Sunday) by default
-    return createWeekRows(getMondayOfWeek(new Date()));
+    return createInitialWeeks();
   });
 
   const [columns, setColumns] = useState<CustomColumn[]>(() => loadColumns());
@@ -39,6 +44,7 @@ export default function App() {
   const skipPush = useRef(false);
   const remoteApplied = useRef(false);
   const debounceRef = useRef<number | null>(null);
+  const lastOwnTimestamp = useRef<number>(0);
 
   // Remote: first hydrate, then live subscribe.
   useEffect(() => {
@@ -53,9 +59,9 @@ export default function App() {
         remoteApplied.current = true;
 
         let nextRows = remote.rows;
-        // If remote has no rows at all, bake in the current week
+        // If remote has no rows at all, bake in initial 2 weeks (current + next)
         if (nextRows.length === 0) {
-          nextRows = createWeekRows(getMondayOfWeek(new Date()));
+          nextRows = createInitialWeeks();
         }
         setRows(nextRows);
         saveRows(nextRows);
@@ -70,6 +76,10 @@ export default function App() {
 
     const unsub = listenToSchedule((remote) => {
       if (!active) return;
+      // Guard against echo loops: ignore our own writes
+      if (remote.updatedAt && remote.updatedAt === lastOwnTimestamp.current) {
+        return;
+      }
       skipPush.current = true;
       remoteApplied.current = true;
       setRows(remote.rows);
@@ -98,8 +108,10 @@ export default function App() {
 
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(async () => {
-      const ok = await pushSchedule(rows, columns);
-      setSyncStatus(ok ? 'live' : 'local');
+      const ts = Date.now();
+      lastOwnTimestamp.current = ts;
+      const ok = await pushSchedule(rows, columns, ts);
+      setSyncStatus(ok !== null ? 'live' : 'local');
     }, 700);
 
     return () => {
@@ -121,8 +133,7 @@ export default function App() {
     setRows((prev) => prev.filter((r) => r.id !== id));
   };
 
-  const addWeek = () => {
-    // Find the latest valid date in rows to add the next week
+  const computeNextMonday = (): Date => {
     let latestMonday: Date | null = null;
     for (const r of rows) {
       if (isValidISODate(r.date)) {
@@ -132,9 +143,14 @@ export default function App() {
         }
       }
     }
+    return latestMonday ? addDays(latestMonday, 7) : getMondayOfWeek(new Date());
+  };
 
-    const nextMonday = latestMonday ? addDays(latestMonday, 7) : getMondayOfWeek(new Date());
-    const newWeekRows = createWeekRows(nextMonday);
+  const nextMondayDate = computeNextMonday();
+  const nextWeekLabel = formatWeekRange(nextMondayDate);
+
+  const addWeek = () => {
+    const newWeekRows = createWeekRows(nextMondayDate);
     setRows((prev) => [...prev, ...newWeekRows]);
     flash('تمت إضافة الأسبوع التالي (الاثنين - الأحد) بنجاح');
   };
@@ -144,10 +160,21 @@ export default function App() {
   };
 
   const addRowToWeek = (mondayIso: string) => {
-    // Adds a new session row pre-filled with the Monday date
     const targetDate = isValidISODate(mondayIso) ? mondayIso : toISODate(new Date());
     setRows((prev) => [...prev, emptyRow(targetDate)]);
     flash('تمت إضافة جلسة جديدة لهذا الأسبوع');
+  };
+
+  const duplicateRowDate = (date: string, afterId: string) => {
+    const newRow = emptyRow(date);
+    setRows((prev) => {
+      const index = prev.findIndex((r) => r.id === afterId);
+      if (index === -1) return [...prev, newRow];
+      const next = [...prev];
+      next.splice(index + 1, 0, newRow);
+      return next;
+    });
+    flash('تمت إضافة جلسة أخرى لهذا اليوم');
   };
 
   const addColumn = (label: string) => {
@@ -169,7 +196,6 @@ export default function App() {
       saveColumns(updated);
       return updated;
     });
-    // Remove custom value entries from all rows
     setRows((prev) =>
       prev.map((r) => {
         if (!r.customValues || !r.customValues[colId]) return r;
@@ -298,11 +324,14 @@ export default function App() {
       <ScheduleTable
         rows={rows}
         columns={columns}
+        nextWeekLabel={nextWeekLabel}
         onUpdate={update}
         onDelete={remove}
         onSetLink={(id) => setActiveLinkRowId(id)}
         onDeleteColumn={deleteColumn}
         onAddRowToWeek={addRowToWeek}
+        onDuplicateRowDate={duplicateRowDate}
+        onAddWeek={addWeek}
       />
 
       <div className="row-count no-print">

@@ -451,6 +451,63 @@ td.col-num {
   color: #6e1f1f;
 }
 
+.row-action-btns {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.row-action-btn.add-btn-small {
+  border: 1px solid var(--gold);
+  background: var(--parchment);
+  color: var(--ink);
+  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.row-action-btn.add-btn-small:hover {
+  background: var(--gold);
+  color: #3a2e10;
+}
+
+.add-next-week-bar {
+  max-width: 1200px;
+  margin: 16px auto 0;
+  display: flex;
+  justify-content: center;
+}
+.btn-add-next-week-large {
+  background: var(--ink);
+  color: var(--gold-light);
+  border: 2px dashed var(--gold);
+  border-radius: 12px;
+  padding: 14px 28px;
+  font-family: 'Tajawal', sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  justify-content: center;
+  transition: all 0.18s ease;
+  box-shadow: 0 4px 14px rgba(18, 64, 63, 0.08);
+}
+.btn-add-next-week-large:hover {
+  background: var(--ink-deep);
+  border-color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(18, 64, 63, 0.15);
+}
+
+
 /* ===== Modals ===== */
 .modal-backdrop {
   position: fixed;
@@ -780,6 +837,31 @@ td.col-num {
     font-size: 0.9rem;
     box-sizing: border-box;
   }
+  .row-action-btns {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+  .row-action-btn.add-btn-small {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--parchment);
+    border: 1.5px solid var(--gold);
+    color: var(--ink);
+  }
+  .row-action-btn.add-btn-small::after {
+    content: ' إضافة جلسة أخرى لهذا اليوم';
+    font-size: 0.88rem;
+    font-weight: 700;
+  }
   .del-btn {
     width: 100%;
     min-height: 44px;
@@ -797,6 +879,11 @@ td.col-num {
   .del-btn::after {
     content: ' حذف هذه الجلسة';
     font-size: 0.88rem;
+  }
+  .btn-add-next-week-large {
+    padding: 16px 14px;
+    font-size: 0.94rem;
+    line-height: 1.4;
   }
 
   /* Empty state */
