@@ -54,6 +54,11 @@ function LinkCell({ row, onSetLink }: { row: ScheduleRow; onSetLink: () => void 
         <a className="link-set" href={row.linkUrl} target="_blank" rel="noopener noreferrer">
           🔗 {row.linkLabel || 'فتح الرابط'}
         </a>
+        {/* Printed under the label so the link still works when a PDF printer drops clickable links
+            (e.g. "Microsoft Print to PDF"); PDF viewers turn visible URLs back into links. */}
+        <a className="link-url-print" href={row.linkUrl} dir="ltr">
+          {row.linkUrl}
+        </a>
         <button type="button" className="edit-pencil no-print" onClick={onSetLink} title="تعديل الرابط">
           ✎
         </button>

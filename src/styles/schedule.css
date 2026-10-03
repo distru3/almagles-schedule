@@ -1236,6 +1236,10 @@ tbody tr.day-today td.day-cell {
   flex-wrap: wrap;
 }
 
+.link-url-print {
+  display: none;
+}
+
 /* ===== Suggestions dropdown ===== */
 .suggest-list {
   position: fixed;
@@ -1875,6 +1879,22 @@ tbody tr.day-today td.day-cell {
     text-decoration: underline !important;
     padding: 0 !important;
     font-size: 0.75rem !important;
+  }
+  .link-holder {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 1px !important;
+  }
+  .link-url-print {
+    display: block !important;
+    font-size: 0.62rem !important;
+    color: #1a4d8c !important;
+    text-decoration: none !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-all !important;
+    text-align: left !important;
+    line-height: 1.25 !important;
   }
   .cell-text {
     border: none !important;

@@ -67,7 +67,10 @@ function PrintDialog({ weekKeys, defaultSelected, onPrint, onClose }: Props) {
               </label>
             ))}
           </div>
-          <p className="print-hint">في نافذة الطباعة اختر «Save as PDF» لحفظ ملف PDF. الأيام الفارغة لا تُطبع.</p>
+          <p className="print-hint">
+            في نافذة الطباعة اختر <b>«Save as PDF / حفظ بتنسيق PDF»</b> لتبقى الروابط قابلة للنقر — خيار «Microsoft Print
+            to PDF» يُلغي الروابط. الأيام الفارغة لا تُطبع.
+          </p>
         </div>
 
         <div className="modal-actions">
