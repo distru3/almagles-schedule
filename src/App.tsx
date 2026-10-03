@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import type { ScheduleRow, CustomColumn } from './types';
 import { emptyRow, parseCsv, downloadCsv, downloadTemplate } from './lib/csv';
 import { loadRows, saveRows, loadColumns, saveColumns, loadWeeks, saveWeeks } from './lib/storage';
@@ -47,6 +48,8 @@ export default function App() {
   const [isAddWeekOpen, setIsAddWeekOpen] = useState(false);
   const [isPrintOpen, setIsPrintOpen] = useState(false);
   const [printWeekKeys, setPrintWeekKeys] = useState<string[] | null>(null);
+  const [exportWeekKeys, setExportWeekKeys] = useState<string[] | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [selectedWeekKey, setSelectedWeekKey] = useState<string>(() => {
     return toISODate(getSaturdayOfWeek(new Date()));
   });
@@ -307,6 +310,34 @@ export default function App() {
     flash('تم مسح الجدول', 'ok', undo);
   };
 
+  const downloadPdf = async (keys: string[]) => {
+    if (pdfBusy || keys.length === 0) return;
+    setPdfBusy(true);
+    try {
+      // Loaded on demand so the PDF libraries don't slow down the first page load.
+      const { exportWeeksPdf } = await import('./lib/pdfExport');
+      const filename =
+        keys.length === 1 && keys[0] !== 'unassigned'
+          ? `الجدول الأسبوعي - ${formatWeekShort(keys[0])}.pdf`
+          : 'الجدول الأسبوعي.pdf';
+      await exportWeeksPdf({
+        root: document.getElementById('root')!,
+        weekKeys: keys,
+        showWeek: async (k) => {
+          flushSync(() => setExportWeekKeys([k]));
+        },
+        filename,
+      });
+      flash('تم تنزيل ملف PDF');
+    } catch (err) {
+      console.error('[pdf] export failed', err);
+      flash('تعذّر إنشاء ملف PDF — جرّب زر «طباعة» بدلاً من ذلك', 'err');
+    } finally {
+      setExportWeekKeys(null);
+      setPdfBusy(false);
+    }
+  };
+
   const activeLinkRow = rows.find((r) => r.id === activeLinkRowId);
 
   return (
@@ -336,7 +367,7 @@ export default function App() {
         rows={rows}
         columns={columns}
         weekKeys={weekKeys}
-        printWeekKeys={printWeekKeys}
+        printWeekKeys={exportWeekKeys ?? printWeekKeys}
         nextWeekLabel={nextWeekLabel}
         selectedWeekKey={selectedWeekKey}
         onSelectWeekKey={(k) => {
@@ -351,11 +382,20 @@ export default function App() {
         onDeleteWeek={deleteWeek}
         copySourceFor={(k) => findCopySource(rows, k)}
         onCopyWeek={copyWeek}
-        onPrintWeeks={setPrintWeekKeys}
+        onDownloadPdf={downloadPdf}
         onOpenAddWeekModal={() => setIsAddWeekOpen(true)}
       />
 
       <Toast toast={toast} onDismiss={dismissToast} />
+
+      {pdfBusy && (
+        <div className="pdf-busy" role="status" aria-live="polite">
+          <div className="pdf-busy-card">
+            <span className="pdf-spinner" />
+            جارٍ تجهيز ملف PDF…
+          </div>
+        </div>
+      )}
 
       <LinkModal
         isOpen={activeLinkRowId !== null}
@@ -383,6 +423,10 @@ export default function App() {
         onPrint={(keys) => {
           setIsPrintOpen(false);
           setPrintWeekKeys(keys);
+        }}
+        onDownload={(keys) => {
+          setIsPrintOpen(false);
+          void downloadPdf(keys);
         }}
         onClose={() => setIsPrintOpen(false)}
       />

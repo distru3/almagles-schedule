@@ -64,8 +64,8 @@ export default function Toolbar({
         <button className="btn-add-week" onClick={onAddWeek} title="تجهيز أسبوع كامل (السبت - الجمعة) بتواريخه الحقيقية">
           📅 إضافة أسبوع
         </button>
-        <button className="btn-print" onClick={onPrint} title="طباعة الأسبوع المعروض أو حفظه PDF">
-          🖨 طباعة / PDF
+        <button className="btn-print" onClick={onPrint} title="تنزيل الجدول PDF أو طباعته">
+          ⬇ PDF / طباعة
         </button>
         <button className="btn-column" onClick={onOpenAddColumn} title="إضافة عمود مخصص للجدول">
           ➕ عمود

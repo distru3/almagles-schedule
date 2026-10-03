@@ -7,6 +7,7 @@ interface Props {
   weekKeys: string[];
   defaultSelected: string[];
   onPrint: (weekKeys: string[]) => void;
+  onDownload: (weekKeys: string[]) => void;
   onClose: () => void;
 }
 
@@ -21,7 +22,7 @@ function weekLabel(k: string): string {
   return rel ? `${formatWeekShort(k)} (${rel})` : formatWeekShort(k);
 }
 
-function PrintDialog({ weekKeys, defaultSelected, onPrint, onClose }: Props) {
+function PrintDialog({ weekKeys, defaultSelected, onPrint, onDownload, onClose }: Props) {
   const [selected, setSelected] = useState<Set<string>>(() => new Set(defaultSelected));
   useEscape(onClose);
 
@@ -41,7 +42,7 @@ function PrintDialog({ weekKeys, defaultSelected, onPrint, onClose }: Props) {
     <div className="modal-backdrop no-print" onClick={onClose} role="dialog" aria-modal="true">
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>🖨 طباعة / حفظ PDF</h3>
+          <h3>⬇ تنزيل PDF / طباعة</h3>
           <button type="button" className="modal-close" onClick={onClose} aria-label="إغلاق">
             ✕
           </button>
@@ -68,8 +69,8 @@ function PrintDialog({ weekKeys, defaultSelected, onPrint, onClose }: Props) {
             ))}
           </div>
           <p className="print-hint">
-            في نافذة الطباعة اختر <b>«Save as PDF / حفظ بتنسيق PDF»</b> لتبقى الروابط قابلة للنقر — خيار «Microsoft Print
-            to PDF» يُلغي الروابط. الأيام الفارغة لا تُطبع.
+            <b>«تنزيل PDF»</b> يُنشئ الملف مباشرة بنفس الشكل على أي جهاز، والروابط فيه قابلة للنقر. استخدم «طباعة» للطباعة
+            على ورق. الأيام الفارغة لا تظهر.
           </p>
         </div>
 
@@ -78,9 +79,17 @@ function PrintDialog({ weekKeys, defaultSelected, onPrint, onClose }: Props) {
             type="button"
             className="modal-btn-primary"
             disabled={chosen.length === 0}
+            onClick={() => onDownload(chosen)}
+          >
+            ⬇ تنزيل PDF {chosen.length > 1 ? `(${chosen.length} أسابيع)` : ''}
+          </button>
+          <button
+            type="button"
+            className="modal-btn-secondary"
+            disabled={chosen.length === 0}
             onClick={() => onPrint(chosen)}
           >
-            🖨 طباعة {chosen.length > 1 ? `${chosen.length} أسابيع` : chosen.length === 1 ? 'أسبوع واحد' : ''}
+            🖨 طباعة
           </button>
           <button type="button" className="modal-btn-cancel" onClick={onClose}>
             إلغاء

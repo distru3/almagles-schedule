@@ -1357,6 +1357,55 @@ tbody tr.day-today td.day-cell {
   font-size: 0.8rem;
   color: #7a6e4d;
 }
+.modal-btn-secondary {
+  background: #fff;
+  color: var(--ink);
+  border: 1.5px solid var(--ink);
+  padding: 11px 16px;
+  border-radius: 8px;
+  font-family: 'Tajawal', sans-serif;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 44px;
+}
+.modal-btn-secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.pdf-busy {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(246, 241, 228, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pdf-busy-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  border: 1.5px solid var(--gold);
+  border-radius: 12px;
+  padding: 18px 26px;
+  font-weight: 700;
+  color: var(--ink);
+  box-shadow: 0 10px 30px rgba(15, 61, 62, 0.15);
+}
+.pdf-spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid var(--parchment-deep);
+  border-top-color: var(--ink);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .modal-btn-primary:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -1947,6 +1996,10 @@ tbody tr.day-today td.day-cell {
     color: #000 !important;
   }
   .print-hide {
+    display: none !important;
+  }
+  tbody tr::before {
+    content: none !important;
     display: none !important;
   }
   tbody tr.day-alt {

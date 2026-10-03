@@ -34,7 +34,7 @@ interface Props {
   onDeleteWeek: (weekKey: string) => void;
   copySourceFor: (weekKey: string) => string | null;
   onCopyWeek: (fromKey: string, toKey: string) => void;
-  onPrintWeeks: (weekKeys: string[]) => void;
+  onDownloadPdf: (weekKeys: string[]) => void;
   onOpenAddWeekModal: () => void;
 }
 
@@ -357,7 +357,7 @@ export default function ScheduleTable({
   onDeleteWeek,
   copySourceFor,
   onCopyWeek,
-  onPrintWeeks,
+  onDownloadPdf,
   onOpenAddWeekModal,
 }: Props) {
   // Group rows by week (Saturday key)
@@ -668,10 +668,10 @@ export default function ScheduleTable({
                             <button
                               type="button"
                               className="btn-week-print-session"
-                              onClick={() => onPrintWeeks([weekKey])}
-                              title="طباعة هذا الأسبوع فقط بصيغة PDF"
+                              onClick={() => onDownloadPdf([weekKey])}
+                              title="تنزيل هذا الأسبوع فقط كملف PDF"
                             >
-                              🖨 طباعة هذا الأسبوع
+                              ⬇ PDF لهذا الأسبوع
                             </button>
                           )}
                           <button
