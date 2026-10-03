@@ -2,7 +2,6 @@ import { useRef } from 'react';
 
 interface Props {
   onAddWeek: () => void;
-  onAddRow: () => void;
   onOpenAddColumn: () => void;
   onExportCsv: () => void;
   onImportCsv: (file: File) => void;
@@ -13,7 +12,6 @@ interface Props {
 
 export default function Toolbar({
   onAddWeek,
-  onAddRow,
   onOpenAddColumn,
   onExportCsv,
   onImportCsv,
@@ -26,9 +24,6 @@ export default function Toolbar({
     <div className="toolbar no-print">
       <button className="btn-add-week" onClick={onAddWeek} title="تجهيز أسبوع كامل (السبت - الجمعة) بتواريخه الحقيقية">
         📅 إضافة أسبوع
-      </button>
-      <button className="btn-add" onClick={onAddRow} title="إضافة صف/جلسة منفردة">
-        ➕ إضافة صف
       </button>
       <button className="btn-column" onClick={onOpenAddColumn} title="إضافة عمود مخصص للجدول">
         ➕ إضافة عمود

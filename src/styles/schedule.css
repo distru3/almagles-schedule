@@ -225,7 +225,7 @@ th.col-del {
 tbody tr {
   border-bottom: 1px solid var(--parchment-deep);
 }
-tbody tr:nth-child(even) {
+tbody tr.day-alt {
   background: #fcfaf3;
 }
 tbody tr:hover {
@@ -938,6 +938,85 @@ td.col-num {
   text-align: left;
 }
 
+/* ===== Day groups (each week is Saturday → Friday) ===== */
+.cell-print {
+  display: none;
+}
+tbody tr.day-first td {
+  border-top: 1.5px solid var(--line);
+}
+td.day-cell {
+  vertical-align: top;
+  background: #faf6ea;
+  border-inline-start: 1px solid var(--parchment-deep);
+  border-inline-end: 1px solid var(--parchment-deep);
+}
+.day-label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+.day-name {
+  font-weight: 800;
+  color: var(--ink);
+  font-size: 1rem;
+}
+.btn-day-add {
+  margin-top: 6px;
+  background: #fff;
+  border: 1px dashed var(--gold);
+  color: var(--ink);
+  font-family: 'Tajawal', sans-serif;
+  font-weight: 700;
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-day-add:hover {
+  background: var(--gold);
+  color: #3a2e10;
+  border-style: solid;
+}
+td.day-empty-msg {
+  color: #b7ac8c;
+  font-style: italic;
+  font-size: 0.85rem;
+  vertical-align: middle;
+}
+.move-day-select {
+  font-family: 'Tajawal', sans-serif;
+  font-size: 0.78rem;
+  color: var(--ink);
+  background: var(--parchment);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 4px;
+  cursor: pointer;
+}
+.btn-week-delete {
+  background: #fff;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  font-family: 'Tajawal', sans-serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.btn-week-delete:hover {
+  background: var(--danger);
+  color: #fff;
+}
+.week-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 /* ===== Mobile & Touch Screen: Responsive Cards ===== */
 @media screen and (max-width: 768px) {
   body {
@@ -1201,6 +1280,46 @@ td.col-num {
     line-height: 1.4;
   }
 
+  /* Day groups on mobile: the day cell heads the first card; later cards show a caption */
+  td.day-cell {
+    background: #faf6ea;
+    border-radius: 8px !important;
+    padding: 10px 12px;
+  }
+  td.day-cell::before,
+  td.day-empty-msg::before {
+    content: none;
+  }
+  .day-label {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .btn-day-add {
+    margin-top: 0;
+    margin-inline-start: auto;
+    min-height: 36px;
+  }
+  tbody tr.day-cont::before {
+    content: attr(data-day);
+    font-weight: 700;
+    color: var(--ink);
+    font-size: 0.85rem;
+    background: #faf6ea;
+    border-radius: 6px;
+    padding: 4px 10px;
+  }
+  .move-day-select {
+    width: 100%;
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .btn-week-delete {
+    width: 100%;
+    min-height: 44px;
+  }
+
   /* Empty state */
   .empty-row td {
     display: block;
@@ -1263,8 +1382,6 @@ td.col-num {
     width: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
   }
   .table-wrap {
     box-shadow: none !important;
@@ -1297,7 +1414,7 @@ td.col-num {
   th,
   td {
     display: table-cell !important;
-    vertical-align: middle !important;
+    vertical-align: top !important;
     padding: 3px 6px !important;
     border: 1px solid #bbb !important;
     box-sizing: border-box !important;
@@ -1405,6 +1522,37 @@ td.col-num {
   }
   .cell-text:empty::before {
     content: ' ';
+  }
+
+  /* Plain-text mirror of each cell: wraps and grows freely, so nothing gets clipped */
+  .cell-print {
+    display: block !important;
+    white-space: pre-wrap !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+    font-size: 0.78rem !important;
+    line-height: 1.35 !important;
+    color: #000 !important;
+  }
+  .print-hide {
+    display: none !important;
+  }
+  tbody tr.day-alt {
+    background: #faf7ee !important;
+  }
+  tbody tr.day-first td {
+    border-top: 1.5px solid #888 !important;
+  }
+  td.day-cell {
+    background: #f4eedd !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    width: 1% !important;
+    white-space: nowrap !important;
+  }
+  .day-name {
+    font-size: 0.82rem !important;
+    color: #12403f !important;
   }
 }
 

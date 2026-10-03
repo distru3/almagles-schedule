@@ -4,7 +4,15 @@ import { emptyRow, parseCsv, downloadCsv, downloadTemplate } from './lib/csv';
 import { loadRows, saveRows, loadColumns, saveColumns } from './lib/storage';
 import { isFirebaseConfigured, database } from './lib/firebase';
 import { fetchScheduleOnce, pushSchedule, listenToSchedule } from './lib/sync';
-import { getSaturdayOfWeek, generateWeekDates, addDays, isValidISODate, toISODate, formatWeekRange } from './lib/dates';
+import {
+  getSaturdayOfWeek,
+  generateWeekDates,
+  addDays,
+  isValidISODate,
+  toISODate,
+  formatWeekRange,
+  getWeekKey,
+} from './lib/dates';
 import Masthead from './components/Masthead';
 import HelpInstructions from './components/HelpInstructions';
 import Toolbar from './components/Toolbar';
@@ -103,6 +111,12 @@ export default function App() {
     };
   }, []);
 
+  // Keep the browser copy current so local mode (and the next page load) never loses edits.
+  useEffect(() => {
+    saveRows(rows);
+    saveColumns(columns);
+  }, [rows, columns]);
+
   // Debounced push to Firebase on local edits (both rows and custom columns)
   useEffect(() => {
     if (skipPush.current) {
@@ -170,26 +184,15 @@ export default function App() {
     flash(`تمت إضافة ${formatWeekRange(saturdayDate)} بنجاح`);
   };
 
-  const addRow = () => {
-    setRows((prev) => [...prev, emptyRow()]);
+  const addSession = (date: string) => {
+    setRows((prev) => [...prev, emptyRow(date)]);
   };
 
-  const addRowToWeek = (weekIso: string) => {
-    const targetDate = isValidISODate(weekIso) ? weekIso : toISODate(new Date());
-    setRows((prev) => [...prev, emptyRow(targetDate)]);
-    flash('تمت إضافة جلسة جديدة لهذا الأسبوع');
-  };
-
-  const duplicateRowDate = (date: string, afterId: string) => {
-    const newRow = emptyRow(date);
-    setRows((prev) => {
-      const index = prev.findIndex((r) => r.id === afterId);
-      if (index === -1) return [...prev, newRow];
-      const next = [...prev];
-      next.splice(index + 1, 0, newRow);
-      return next;
-    });
-    flash('تمت إضافة جلسة أخرى لهذا اليوم');
+  const deleteWeek = (weekKey: string) => {
+    const label = weekKey === 'unassigned' ? 'الجلسات غير محددة التاريخ' : formatWeekRange(weekKey);
+    if (!window.confirm(`سيتم حذف كل جلسات ${label}. هل أنت متأكد؟`)) return;
+    setRows((prev) => prev.filter((r) => getWeekKey(r.date) !== weekKey));
+    flash('تم حذف الأسبوع');
   };
 
   const addColumn = (label: string) => {
@@ -327,7 +330,6 @@ export default function App() {
 
       <Toolbar
         onAddWeek={() => setIsAddWeekOpen(true)}
-        onAddRow={addRow}
         onOpenAddColumn={() => setIsAddColumnOpen(true)}
         onExportCsv={exportCsvFile}
         onImportCsv={importCsvFile}
@@ -346,8 +348,8 @@ export default function App() {
         onDelete={remove}
         onSetLink={(id) => setActiveLinkRowId(id)}
         onDeleteColumn={deleteColumn}
-        onAddRowToWeek={addRowToWeek}
-        onDuplicateRowDate={duplicateRowDate}
+        onAddSession={addSession}
+        onDeleteWeek={deleteWeek}
         onOpenAddWeekModal={() => setIsAddWeekOpen(true)}
       />
 

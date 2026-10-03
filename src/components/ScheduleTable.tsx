@@ -1,6 +1,13 @@
 import { Fragment, useRef, useEffect } from 'react';
 import type { ScheduleRow, CustomColumn } from '../types';
-import { formatHijri, formatGregorianShort, formatWeekday, getWeekKey, formatWeekRange } from '../lib/dates';
+import {
+  formatHijri,
+  formatGregorianShort,
+  formatWeekday,
+  getWeekKey,
+  formatWeekRange,
+  generateWeekDates,
+} from '../lib/dates';
 
 interface Props {
   rows: ScheduleRow[];
@@ -12,9 +19,20 @@ interface Props {
   onDelete: (id: string) => void;
   onSetLink: (id: string) => void;
   onDeleteColumn: (colId: string) => void;
-  onAddRowToWeek: (weekIso: string) => void;
-  onDuplicateRowDate: (date: string, afterId: string) => void;
+  onAddSession: (date: string) => void;
+  onDeleteWeek: (weekKey: string) => void;
   onOpenAddWeekModal: () => void;
+}
+
+function isBlankRow(row: ScheduleRow): boolean {
+  return (
+    !row.time.trim() &&
+    !row.section.trim() &&
+    !row.title.trim() &&
+    !row.notes.trim() &&
+    !row.linkUrl &&
+    !Object.values(row.customValues || {}).some((v) => v.trim())
+  );
 }
 
 function LinkCell({ row, onSetLink }: { row: ScheduleRow; onSetLink: () => void }) {
@@ -82,6 +100,20 @@ function DateCell({ value, onChange }: { value: string; onChange: (v: string) =>
   );
 }
 
+/** Fixed day label for a week's day group: weekday, Hijri and Gregorian date. */
+function DayLabel({ date, onAddSession }: { date: string; onAddSession: () => void }) {
+  return (
+    <div className="day-label">
+      <span className="day-name">{formatWeekday(date)}</span>
+      <span className="date-hijri">{formatHijri(date)}</span>
+      <span className="date-greg">{formatGregorianShort(date)} م</span>
+      <button type="button" className="btn-day-add no-print" onClick={onAddSession} title="إضافة جلسة لهذا اليوم">
+        ➕ جلسة
+      </button>
+    </div>
+  );
+}
+
 function AutoFoldingCell({
   value,
   placeholder,
@@ -106,18 +138,88 @@ function AutoFoldingCell({
     resize();
   }, [value]);
 
-  return (
-    <textarea
-      ref={textareaRef}
-      rows={1}
-      className={className}
-      value={value}
-      placeholder={placeholder}
-      onChange={(e) => {
-        onChange(e.target.value);
+  // Re-measure when the column width changes or web fonts finish loading,
+  // otherwise wrapped text stays clipped at its old height.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    let lastWidth = el.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (el.clientWidth !== lastWidth) {
+        lastWidth = el.clientWidth;
         resize();
-      }}
-    />
+      }
+    });
+    observer.observe(el);
+    document.fonts?.ready.then(resize);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <>
+      <textarea
+        ref={textareaRef}
+        rows={1}
+        className={`${className} no-print`}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => {
+          onChange(e.target.value);
+          resize();
+        }}
+      />
+      {/* Textareas can't grow to fit their content in print, so print a plain-text mirror instead. */}
+      <div className="cell-print">{value}</div>
+    </>
+  );
+}
+
+function SessionCells({
+  row,
+  columns,
+  onUpdate,
+  onSetLink,
+}: {
+  row: ScheduleRow;
+  columns: CustomColumn[];
+  onUpdate: (id: string, patch: Partial<ScheduleRow>) => void;
+  onSetLink: (id: string) => void;
+}) {
+  return (
+    <>
+      <td data-label="الوقت">
+        <AutoFoldingCell value={row.time} placeholder="مثال: 10:00" onChange={(v) => onUpdate(row.id, { time: v })} />
+      </td>
+      <td data-label="القسم">
+        <AutoFoldingCell value={row.section} placeholder="القسم…" onChange={(v) => onUpdate(row.id, { section: v })} />
+      </td>
+      <td data-label="العنوان">
+        <AutoFoldingCell value={row.title} placeholder="عنوان الجلسة…" onChange={(v) => onUpdate(row.id, { title: v })} />
+      </td>
+      <td data-label="ملاحظات">
+        <AutoFoldingCell
+          className="cell-text area"
+          value={row.notes}
+          placeholder="ملاحظات أو فوائد…"
+          onChange={(v) => onUpdate(row.id, { notes: v })}
+        />
+      </td>
+      {columns.map((col) => (
+        <td key={col.id} className="col-custom" data-label={col.label}>
+          <AutoFoldingCell
+            value={row.customValues?.[col.id] || ''}
+            placeholder={`${col.label}…`}
+            onChange={(v) => {
+              const next = { ...(row.customValues || {}), [col.id]: v };
+              onUpdate(row.id, { customValues: next });
+            }}
+          />
+        </td>
+      ))}
+      <td className="link-cell" data-label="الرابط">
+        <LinkCell row={row} onSetLink={() => onSetLink(row.id)} />
+      </td>
+    </>
   );
 }
 
@@ -131,8 +233,8 @@ export default function ScheduleTable({
   onDelete,
   onSetLink,
   onDeleteColumn,
-  onAddRowToWeek,
-  onDuplicateRowDate,
+  onAddSession,
+  onDeleteWeek,
   onOpenAddWeekModal,
 }: Props) {
   // Group rows by week (Saturday key)
@@ -194,7 +296,101 @@ export default function ScheduleTable({
       ? [effectiveWeekKey]
       : sortedKeys.slice(0, 1);
 
+  // #, day, time, section, title, notes, ...custom, link, actions
   const totalCols = 8 + columns.length;
+  const sessionCols = 5 + columns.length; // time..link
+
+  const actionsCell = (row: ScheduleRow, weekDays: string[] | null) => (
+    <td className="no-print col-del-td" data-label="الإجراءات" style={{ textAlign: 'center' }}>
+      <div className="row-action-btns">
+        {weekDays && (
+          <select
+            className="move-day-select"
+            value={row.date}
+            onChange={(e) => onUpdate(row.id, { date: e.target.value })}
+            title="نقل الجلسة إلى يوم آخر"
+          >
+            {weekDays.map((d) => (
+              <option key={d} value={d}>
+                {formatWeekday(d)}
+              </option>
+            ))}
+          </select>
+        )}
+        <button type="button" className="del-btn" onClick={() => onDelete(row.id)} title="حذف الجلسة">
+          🗑
+        </button>
+      </div>
+    </td>
+  );
+
+  const renderWeekBody = (weekKey: string, weekRows: ScheduleRow[]) => {
+    if (weekKey === 'unassigned') {
+      return weekRows.map((row, idx) => (
+        <tr key={row.id} className={isBlankRow(row) ? 'print-hide' : undefined}>
+          <td className="col-num" data-label="رقم">
+            {idx + 1}
+          </td>
+          <td className="date-cell" data-label="التاريخ">
+            <DateCell value={row.date} onChange={(v) => onUpdate(row.id, { date: v })} />
+          </td>
+          <SessionCells row={row} columns={columns} onUpdate={onUpdate} onSetLink={onSetLink} />
+          {actionsCell(row, null)}
+        </tr>
+      ));
+    }
+
+    const weekDays = generateWeekDates(weekKey);
+    let sessionNumber = 0;
+
+    return weekDays.map((day, dayIdx) => {
+      const sessions = weekRows.filter((r) => r.date === day);
+      const altClass = dayIdx % 2 === 1 ? 'day-alt' : '';
+      const dayCaption = `${formatWeekday(day)} — ${formatHijri(day)}`;
+
+      if (sessions.length === 0) {
+        return (
+          <tr key={`empty-${day}`} className={`day-empty print-hide ${altClass}`} data-day={dayCaption}>
+            <td className="col-num" data-label="" />
+            <td className="day-cell" data-label="اليوم">
+              <DayLabel date={day} onAddSession={() => onAddSession(day)} />
+            </td>
+            <td colSpan={sessionCols + 1} className="day-empty-msg" data-label="">
+              لا توجد جلسات — اضغط «➕ جلسة» للإضافة
+            </td>
+          </tr>
+        );
+      }
+
+      // Days whose sessions are all still blank are left out of the PDF.
+      const allBlank = sessions.every(isBlankRow);
+
+      return (
+        <Fragment key={`day-${day}`}>
+          {sessions.map((row, i) => {
+            sessionNumber += 1;
+            const classes = [i === 0 ? 'day-first' : 'day-cont', altClass, allBlank ? 'print-hide' : '']
+              .filter(Boolean)
+              .join(' ');
+            return (
+              <tr key={row.id} className={classes} data-day={dayCaption}>
+                <td className="col-num" data-label="رقم">
+                  {sessionNumber}
+                </td>
+                {i === 0 && (
+                  <td className="day-cell" rowSpan={sessions.length} data-label="اليوم">
+                    <DayLabel date={day} onAddSession={() => onAddSession(day)} />
+                  </td>
+                )}
+                <SessionCells row={row} columns={columns} onUpdate={onUpdate} onSetLink={onSetLink} />
+                {actionsCell(row, weekDays)}
+              </tr>
+            );
+          })}
+        </Fragment>
+      );
+    });
+  };
 
   return (
     <div className="schedule-container">
@@ -267,7 +463,7 @@ export default function ScheduleTable({
           <thead>
             <tr>
               <th className="col-num">#</th>
-              <th className="col-date">التاريخ</th>
+              <th className="col-date">اليوم</th>
               <th className="col-time">الوقت</th>
               <th className="col-section">القسم</th>
               <th className="col-title">العنوان</th>
@@ -299,7 +495,7 @@ export default function ScheduleTable({
                   colSpan={totalCols}
                   style={{ textAlign: 'center', color: '#a8a29e', padding: '28px', fontStyle: 'italic' }}
                 >
-                  لا توجد صفوف بعد — اضغط «📅 إضافة أسبوع» أو «➕ إضافة صف» للبدء.
+                  لا توجد صفوف بعد — اضغط «📅 إضافة أسبوع» للبدء.
                 </td>
               </tr>
             )}
@@ -323,109 +519,29 @@ export default function ScheduleTable({
                         </div>
                         <div className="week-actions no-print">
                           {weekKey !== 'unassigned' && (
-                            <>
-                              <button
-                                type="button"
-                                className="btn-week-add-session"
-                                onClick={() => onAddRowToWeek(weekKey)}
-                                title="إضافة جلسة لهذا الأسبوع"
-                              >
-                                ➕ إضافة جلسة
-                              </button>
-                              <button
-                                type="button"
-                                className="btn-week-print-session"
-                                onClick={() => handlePrintSpecificWeek(weekKey)}
-                                title="طباعة هذا الأسبوع فقط بصيغة PDF"
-                              >
-                                🖨 طباعة هذا الأسبوع
-                              </button>
-                            </>
+                            <button
+                              type="button"
+                              className="btn-week-print-session"
+                              onClick={() => handlePrintSpecificWeek(weekKey)}
+                              title="طباعة هذا الأسبوع فقط بصيغة PDF"
+                            >
+                              🖨 طباعة هذا الأسبوع
+                            </button>
                           )}
+                          <button
+                            type="button"
+                            className="btn-week-delete"
+                            onClick={() => onDeleteWeek(weekKey)}
+                            title="حذف كل جلسات هذا الأسبوع"
+                          >
+                            🗑 حذف الأسبوع
+                          </button>
                         </div>
                       </div>
                     </td>
                   </tr>
 
-                  {weekRows.map((row, rowIdx) => {
-                    const sessionNumber = rowIdx + 1;
-                    return (
-                      <tr key={row.id}>
-                        <td className="col-num" data-label="رقم">
-                          {sessionNumber}
-                        </td>
-                        <td className="date-cell" data-label="التاريخ">
-                          <DateCell value={row.date} onChange={(v) => onUpdate(row.id, { date: v })} />
-                        </td>
-                        <td data-label="الوقت">
-                          <AutoFoldingCell
-                            value={row.time}
-                            placeholder="مثال: 10:00"
-                            onChange={(v) => onUpdate(row.id, { time: v })}
-                          />
-                        </td>
-                        <td data-label="القسم">
-                          <AutoFoldingCell
-                            value={row.section}
-                            placeholder="القسم…"
-                            onChange={(v) => onUpdate(row.id, { section: v })}
-                          />
-                        </td>
-                        <td data-label="العنوان">
-                          <AutoFoldingCell
-                            value={row.title}
-                            placeholder="عنوان الجلسة…"
-                            onChange={(v) => onUpdate(row.id, { title: v })}
-                          />
-                        </td>
-                        <td data-label="ملاحظات">
-                          <AutoFoldingCell
-                            className="cell-text area"
-                            value={row.notes}
-                            placeholder="ملاحظات أو فوائد…"
-                            onChange={(v) => onUpdate(row.id, { notes: v })}
-                          />
-                        </td>
-
-                        {columns.map((col) => (
-                          <td key={col.id} className="col-custom" data-label={col.label}>
-                            <AutoFoldingCell
-                              value={row.customValues?.[col.id] || ''}
-                              placeholder={`${col.label}…`}
-                              onChange={(v) => {
-                                const next = { ...(row.customValues || {}), [col.id]: v };
-                                onUpdate(row.id, { customValues: next });
-                              }}
-                            />
-                          </td>
-                        ))}
-
-                        <td className="link-cell" data-label="الرابط">
-                          <LinkCell row={row} onSetLink={() => onSetLink(row.id)} />
-                        </td>
-                        <td className="no-print col-del-td" data-label="الإجراءات" style={{ textAlign: 'center' }}>
-                          <div className="row-action-btns">
-                            <button
-                              type="button"
-                              className="row-action-btn add-btn-small"
-                              onClick={() => onDuplicateRowDate(row.date, row.id)}
-                              title="إضافة جلسة أخرى في هذا اليوم"
-                            >
-                              ➕
-                            </button>
-                            <button
-                              type="button"
-                              className="del-btn"
-                              onClick={() => onDelete(row.id)}
-                              title="حذف الجلسة"
-                            >
-                              🗑
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {renderWeekBody(weekKey, weekRows)}
                 </Fragment>
               );
             })}

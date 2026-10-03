@@ -35,7 +35,7 @@ export default function AddWeekModal({
   };
 
   const handleAddCustom = () => {
-    if (!parsedCustomSat) return;
+    if (!parsedCustomSat || isAlreadyExists) return;
     onAddWeek(parsedCustomSat);
     onClose();
   };
@@ -120,7 +120,7 @@ export default function AddWeekModal({
             <button
               type="button"
               className="btn-modal-action btn-add-custom"
-              disabled={!parsedCustomSat}
+              disabled={!parsedCustomSat || isAlreadyExists}
               onClick={handleAddCustom}
             >
               ➕ تجهيز وإضافة هذا الأسبوع
