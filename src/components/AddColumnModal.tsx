@@ -1,3 +1,4 @@
+import { useEscape } from '../lib/useEscape';
 import { useState, useRef, useEffect } from 'react';
 
 interface Props {
@@ -14,6 +15,7 @@ export default function AddColumnModal({ isOpen, onAdd, onClose }: Props) {
 function AddColumnDialog({ onAdd, onClose }: { onAdd: (label: string) => void; onClose: () => void }) {
   const [label, setLabel] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  useEscape(onClose);
 
   useEffect(() => {
     inputRef.current?.focus();

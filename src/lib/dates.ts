@@ -90,14 +90,37 @@ export function generateWeekDates(saturday: Date | string): string[] {
 
 /**
  * Formats a clean Arabic range for the week starting on Saturday:
- * e.g. "الأسبوع: السبت 19 سبتمبر — الجمعة 25 سبتمبر 2026 م"
+ * e.g. "السبت 19 سبتمبر — الجمعة 25 سبتمبر 2026 م (… إلى …)"
  */
 export function formatWeekRange(saturday: Date | string): string {
   const sat = typeof saturday === 'string' ? getSaturdayOfWeek(saturday) : getSaturdayOfWeek(saturday);
   const fri = addDays(sat, 6);
   const satIso = toISODate(sat);
   const friIso = toISODate(fri);
-  return `الأسبوع: السبت ${formatGregorianShort(satIso)} — الجمعة ${formatGregorianShort(friIso)} م (${formatHijri(satIso)} إلى ${formatHijri(friIso)})`;
+  return `السبت ${formatGregorianShort(satIso)} — الجمعة ${formatGregorianShort(friIso)} م (${formatHijri(satIso)} إلى ${formatHijri(friIso)})`;
 }
 
 
+
+const dayMonthFormatter = new Intl.DateTimeFormat('ar', { day: 'numeric', month: 'long' });
+
+/** Compact week label for menus, e.g. "3 أكتوبر — 9 أكتوبر 2026". */
+export function formatWeekShort(saturday: Date | string): string {
+  const sat = getSaturdayOfWeek(saturday);
+  const fri = addDays(sat, 6);
+  return `${dayMonthFormatter.format(sat)} — ${dayMonthFormatter.format(fri)} ${fri.getFullYear()}`;
+}
+
+/** "هذا الأسبوع" / "الأسبوع القادم" / "الأسبوع الماضي" relative to today, or null for other weeks. */
+export function relativeWeekLabel(weekKey: string): string | null {
+  if (!isValidISODate(weekKey)) return null;
+  const thisWeek = toISODate(getSaturdayOfWeek(new Date()));
+  if (weekKey === thisWeek) return 'هذا الأسبوع';
+  if (weekKey === toISODate(addDays(getSaturdayOfWeek(new Date()), 7))) return 'الأسبوع القادم';
+  if (weekKey === toISODate(addDays(getSaturdayOfWeek(new Date()), -7))) return 'الأسبوع الماضي';
+  return null;
+}
+
+export function todayISO(): string {
+  return toISODate(new Date());
+}

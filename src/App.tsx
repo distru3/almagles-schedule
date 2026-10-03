@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ScheduleRow, CustomColumn } from './types';
 import { emptyRow, parseCsv, downloadCsv, downloadTemplate } from './lib/csv';
 import { loadRows, saveRows, loadColumns, saveColumns } from './lib/storage';
@@ -10,18 +10,17 @@ import {
   addDays,
   isValidISODate,
   toISODate,
-  formatWeekRange,
+  formatWeekShort,
   getWeekKey,
 } from './lib/dates';
 import Masthead from './components/Masthead';
 import HelpInstructions from './components/HelpInstructions';
-import Toolbar from './components/Toolbar';
+import Toolbar, { type SyncStatus } from './components/Toolbar';
+import Toast, { type ToastMessage } from './components/Toast';
 import ScheduleTable from './components/ScheduleTable';
 import LinkModal from './components/LinkModal';
 import AddColumnModal from './components/AddColumnModal';
 import AddWeekModal from './components/AddWeekModal';
-
-type SyncStatus = 'connecting' | 'live' | 'local';
 
 function createWeekRows(saturdayDate: Date): ScheduleRow[] {
   const dates = generateWeekDates(saturdayDate);
@@ -42,7 +41,7 @@ export default function App() {
   });
 
   const [columns, setColumns] = useState<CustomColumn[]>(() => loadColumns());
-  const [message, setMessage] = useState<{ text: string; kind: 'ok' | 'err' } | null>(null);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(
     isFirebaseConfigured && database ? 'connecting' : 'local',
   );
@@ -126,6 +125,7 @@ export default function App() {
     if (!remoteApplied.current || !isFirebaseConfigured || !database) return;
 
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    setSyncStatus('saving');
     debounceRef.current = window.setTimeout(async () => {
       const ts = Date.now();
       lastOwnTimestamp.current = ts;
@@ -138,9 +138,20 @@ export default function App() {
     };
   }, [rows, columns]);
 
-  const flash = (text: string, kind: 'ok' | 'err' = 'ok') => {
-    setMessage({ text, kind });
-    window.setTimeout(() => setMessage((m) => (m?.text === text ? null : m)), 3500);
+  const dismissToast = useCallback(() => setToast(null), []);
+
+  const flash = (text: string, kind: 'ok' | 'err' = 'ok', undo?: () => void) => {
+    setToast({ id: Date.now(), text, kind, undo });
+  };
+
+  /** Restores the whole table (rows + columns) as it was before a bulk change. */
+  const snapshotUndo = () => {
+    const prevRows = rows;
+    const prevColumns = columns;
+    return () => {
+      setRows(prevRows);
+      setColumns(prevColumns);
+    };
   };
 
   const update = (id: string, patch: Partial<ScheduleRow>) => {
@@ -148,8 +159,17 @@ export default function App() {
   };
 
   const remove = (id: string) => {
-    if (!window.confirm('هل تريد حذف هذا الصف؟')) return;
+    const index = rows.findIndex((r) => r.id === id);
+    if (index === -1) return;
+    const removed = rows[index];
     setRows((prev) => prev.filter((r) => r.id !== id));
+    flash('تم حذف الجلسة', 'ok', () => {
+      setRows((prev) => {
+        const next = [...prev];
+        next.splice(Math.min(index, next.length), 0, removed);
+        return next;
+      });
+    });
   };
 
   const computeNextSaturday = (): Date => {
@@ -166,7 +186,7 @@ export default function App() {
   };
 
   const nextSaturdayDate = computeNextSaturday();
-  const nextWeekLabel = formatWeekRange(nextSaturdayDate);
+  const nextWeekLabel = formatWeekShort(nextSaturdayDate);
 
   const existingWeekKeys = Array.from(
     new Set(
@@ -181,7 +201,7 @@ export default function App() {
     const weekKey = toISODate(saturdayDate);
     setRows((prev) => [...prev, ...newWeekRows]);
     setSelectedWeekKey(weekKey);
-    flash(`تمت إضافة ${formatWeekRange(saturdayDate)} بنجاح`);
+    flash(`تمت إضافة أسبوع ${formatWeekShort(saturdayDate)}`);
   };
 
   const addSession = (date: string) => {
@@ -189,10 +209,11 @@ export default function App() {
   };
 
   const deleteWeek = (weekKey: string) => {
-    const label = weekKey === 'unassigned' ? 'الجلسات غير محددة التاريخ' : formatWeekRange(weekKey);
-    if (!window.confirm(`سيتم حذف كل جلسات ${label}. هل أنت متأكد؟`)) return;
-    setRows((prev) => prev.filter((r) => getWeekKey(r.date) !== weekKey));
-    flash('تم حذف الأسبوع');
+    const removed = rows.filter((r) => getWeekKey(r.date) === weekKey);
+    const removedIds = new Set(removed.map((r) => r.id));
+    setRows((prev) => prev.filter((r) => !removedIds.has(r.id)));
+    const label = weekKey === 'unassigned' ? 'الجلسات غير محددة التاريخ' : `أسبوع ${formatWeekShort(weekKey)}`;
+    flash(`تم حذف ${label}`, 'ok', () => setRows((prev) => [...prev, ...removed]));
   };
 
   const addColumn = (label: string) => {
@@ -208,7 +229,7 @@ export default function App() {
 
   const deleteColumn = (colId: string) => {
     const col = columns.find((c) => c.id === colId);
-    if (!window.confirm(`هل أنت متأكد من حذف عمود «${col?.label || ''}»؟`)) return;
+    const undo = snapshotUndo();
     setColumns((prev) => {
       const updated = prev.filter((c) => c.id !== colId);
       saveColumns(updated);
@@ -222,7 +243,7 @@ export default function App() {
         return { ...r, customValues: next };
       }),
     );
-    flash('تم حذف العمود');
+    flash(`تم حذف عمود «${col?.label || ''}»`, 'ok', undo);
   };
 
   const exportCsvFile = () => {
@@ -244,6 +265,7 @@ export default function App() {
     try {
       const { rows: parsed, skipped, detectedColumns } = parseCsv(text, columns);
       if (!window.confirm('سيتم استبدال الجدول الحالي بالمحتوى المستورد. متابعة؟')) return;
+      const undo = snapshotUndo();
 
       setRows(parsed);
       saveRows(parsed);
@@ -252,9 +274,9 @@ export default function App() {
       saveColumns(detectedColumns);
 
       if (skipped.length) {
-        flash(`تم الاستيراد — تم تخطي ${skipped.length} صف (أرقام: ${skipped.join(', ')})`, 'err');
+        flash(`تم الاستيراد — تم تخطي ${skipped.length} صف (أرقام: ${skipped.join(', ')})`, 'err', undo);
       } else {
-        flash('تم استيراد الجدول بنجاح');
+        flash('تم استيراد الجدول بنجاح', 'ok', undo);
       }
     } catch (err) {
       flash(err instanceof Error ? err.message : 'تعذّر استيراد الملف', 'err');
@@ -263,9 +285,9 @@ export default function App() {
 
   const clear = () => {
     if (!window.confirm('سيتم مسح كل صفوف الجدول لجميع الزوار. هل أنت متأكد؟')) return;
+    const undo = snapshotUndo();
     setRows([]);
-    saveRows([]);
-    flash('تم مسح الجدول');
+    flash('تم مسح الجدول', 'ok', undo);
   };
 
   const activeLinkRow = rows.find((r) => r.id === activeLinkRowId);
@@ -276,59 +298,13 @@ export default function App() {
       <HelpInstructions />
 
       {syncStatus === 'local' && (
-        <div
-          style={{
-            maxWidth: 1200,
-            margin: '0 auto 14px',
-            padding: '10px 16px',
-            borderRadius: 8,
-            fontWeight: 700,
-            color: 'var(--danger)',
-            background: '#fdecea',
-            border: '1px solid #f0c2bf',
-          }}
-          className="no-print"
-        >
-          وضع محلي — بدون مزامنة. التعديلات تُحفظ في هذا المتصفح فقط. تحقّق من إعدادات Firebase.
-        </div>
-      )}
-      {syncStatus === 'connecting' && (
-        <div
-          style={{
-            maxWidth: 1200,
-            margin: '0 auto 14px',
-            padding: '10px 16px',
-            borderRadius: 8,
-            fontWeight: 700,
-            color: '#6c6249',
-            background: 'var(--parchment)',
-            border: '1px solid var(--line)',
-          }}
-          className="no-print"
-        >
-          جارٍ الاتصال للتحقق من المزامنة…
-        </div>
-      )}
-
-      {message && (
-        <div
-          style={{
-            maxWidth: 1200,
-            margin: '0 auto 14px',
-            padding: '10px 16px',
-            borderRadius: 8,
-            fontWeight: 700,
-            color: message.kind === 'ok' ? '#0b6b3f' : 'var(--danger)',
-            background: message.kind === 'ok' ? '#eaf7ef' : '#fdecea',
-            border: `1px solid ${message.kind === 'ok' ? '#b7e2c4' : '#f0c2bf'}`,
-          }}
-          className="no-print"
-        >
-          {message.text}
+        <div className="notice notice-warn no-print">
+          وضع محلي — بدون مزامنة. التعديلات تُحفظ في هذا المتصفح فقط ولن يراها غيرك.
         </div>
       )}
 
       <Toolbar
+        syncStatus={syncStatus}
         onAddWeek={() => setIsAddWeekOpen(true)}
         onOpenAddColumn={() => setIsAddColumnOpen(true)}
         onExportCsv={exportCsvFile}
@@ -353,10 +329,7 @@ export default function App() {
         onOpenAddWeekModal={() => setIsAddWeekOpen(true)}
       />
 
-      <div className="row-count no-print">
-        عدد صفوف الجدول: {rows.length}
-        {syncStatus === 'live' && <span style={{ marginInlineStart: 12, color: '#0b6b3f' }}>· متزامن مباشرة ✓</span>}
-      </div>
+      <Toast toast={toast} onDismiss={dismissToast} />
 
       <LinkModal
         isOpen={activeLinkRowId !== null}

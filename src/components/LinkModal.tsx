@@ -1,3 +1,4 @@
+import { useEscape } from '../lib/useEscape';
 import { useState, useEffect, useRef } from 'react';
 
 interface Props {
@@ -34,6 +35,7 @@ function LinkModalDialog({
   const [url, setUrl] = useState(initialUrl || '');
   const [label, setLabel] = useState(initialLabel || '');
   const urlRef = useRef<HTMLInputElement>(null);
+  useEscape(onClose);
 
   useEffect(() => {
     urlRef.current?.focus();

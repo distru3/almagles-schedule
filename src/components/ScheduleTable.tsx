@@ -6,7 +6,12 @@ import {
   formatWeekday,
   getWeekKey,
   formatWeekRange,
+  formatWeekShort,
   generateWeekDates,
+  relativeWeekLabel,
+  todayISO,
+  toISODate,
+  getSaturdayOfWeek,
 } from '../lib/dates';
 
 interface Props {
@@ -104,7 +109,10 @@ function DateCell({ value, onChange }: { value: string; onChange: (v: string) =>
 function DayLabel({ date, onAddSession }: { date: string; onAddSession: () => void }) {
   return (
     <div className="day-label">
-      <span className="day-name">{formatWeekday(date)}</span>
+      <span className="day-name">
+        {formatWeekday(date)}
+        {date === todayISO() && <span className="today-tag no-print">اليوم</span>}
+      </span>
       <span className="date-hijri">{formatHijri(date)}</span>
       <span className="date-greg">{formatGregorianShort(date)} م</span>
       <button type="button" className="btn-day-add no-print" onClick={onAddSession} title="إضافة جلسة لهذا اليوم">
@@ -278,8 +286,13 @@ export default function ScheduleTable({
     }
   };
 
-  const handlePrintCurrentWeek = () => {
-    window.print();
+  const thisWeekKey = toISODate(getSaturdayOfWeek(new Date()));
+  const canJumpToThisWeek = sortedKeys.includes(thisWeekKey) && effectiveWeekKey !== thisWeekKey;
+
+  const weekOptionLabel = (k: string) => {
+    if (k === 'unassigned') return 'جلسات بدون تاريخ محدد';
+    const rel = relativeWeekLabel(k);
+    return rel ? `${rel} · ${formatWeekShort(k)}` : formatWeekShort(k);
   };
 
   const handlePrintSpecificWeek = (weekKey: string) => {
@@ -345,7 +358,9 @@ export default function ScheduleTable({
 
     return weekDays.map((day, dayIdx) => {
       const sessions = weekRows.filter((r) => r.date === day);
-      const altClass = dayIdx % 2 === 1 ? 'day-alt' : '';
+      const altClass = [dayIdx % 2 === 1 ? 'day-alt' : '', day === todayISO() ? 'day-today' : '']
+        .filter(Boolean)
+        .join(' ');
       const dayCaption = `${formatWeekday(day)} — ${formatHijri(day)}`;
 
       if (sessions.length === 0) {
@@ -409,17 +424,14 @@ export default function ScheduleTable({
             </button>
 
             <div className="week-select-wrapper">
-              <span className="week-nav-label">عرض:</span>
               <select
                 className="week-select"
                 value={effectiveWeekKey}
                 onChange={(e) => onSelectWeekKey(e.target.value)}
               >
-                {sortedKeys.map((k, idx) => (
+                {sortedKeys.map((k) => (
                   <option key={k} value={k}>
-                    {k !== 'unassigned'
-                      ? `الأسبوع ${idx + 1}: ${formatWeekRange(k)}`
-                      : 'جلسات بدون تاريخ محدد'}
+                    {weekOptionLabel(k)}
                   </option>
                 ))}
                 <option value="all">👁️ عرض جميع الأسابيع في صفحة واحدة</option>
@@ -435,24 +447,15 @@ export default function ScheduleTable({
             >
               التالي ▶
             </button>
-          </div>
 
-          <div className="week-nav-actions">
             <button
               type="button"
-              className="btn-print-week"
-              onClick={handlePrintCurrentWeek}
-              title="طباعة الأسبوع الظاهر على الشاشة فقط بصيغة PDF"
+              className="btn-week-today"
+              onClick={() => onSelectWeekKey(thisWeekKey)}
+              disabled={!canJumpToThisWeek}
+              title="الانتقال إلى الأسبوع الحالي"
             >
-              🖨 طباعة هذا الأسبوع (PDF)
-            </button>
-            <button
-              type="button"
-              className="btn-open-add-week"
-              onClick={onOpenAddWeekModal}
-              title="إضافة أسبوع جديد (تلقائي أو اختيار أي أسبوع بعيد)"
-            >
-              📅➕ إضافة أسبوع...
+              ⦿ هذا الأسبوع
             </button>
           </div>
         </div>
@@ -502,7 +505,7 @@ export default function ScheduleTable({
 
             {keysToRender.map((weekKey) => {
               const weekRows = weekMap.get(weekKey) || [];
-              const weekIdx = sortedKeys.indexOf(weekKey);
+              const relLabel = relativeWeekLabel(weekKey);
 
               return (
                 <Fragment key={`week-group-${weekKey}`}>
@@ -510,15 +513,15 @@ export default function ScheduleTable({
                     <td colSpan={totalCols} data-label="الأسبوع">
                       <div className="week-header-content">
                         <div className="week-title-wrap">
-                          <span className="week-badge">
-                            {weekIdx >= 0 ? `الأسبوع ${weekIdx + 1}` : 'أسبوع'}
+                          <span className={`week-badge${relLabel === 'هذا الأسبوع' ? ' week-badge-now' : ''}`}>
+                            {weekKey === 'unassigned' ? 'بدون تاريخ' : relLabel || 'أسبوع'}
                           </span>
                           <span className="week-range-text">
                             {weekKey !== 'unassigned' ? formatWeekRange(weekKey) : 'جلسات غير محددة التاريخ'}
                           </span>
                         </div>
                         <div className="week-actions no-print">
-                          {weekKey !== 'unassigned' && (
+                          {weekKey !== 'unassigned' && effectiveWeekKey === 'all' && (
                             <button
                               type="button"
                               className="btn-week-print-session"
@@ -551,8 +554,9 @@ export default function ScheduleTable({
 
       <div className="add-next-week-bar no-print">
         <button type="button" className="btn-add-next-week-large" onClick={onOpenAddWeekModal}>
-          <span className="plus-icon">📅➕</span>
-          <span>إضافة أسبوع جديد (التالي: {nextWeekLabel} — أو اختيار أي تاريخ محدد)</span>
+          <span className="plus-icon">＋</span>
+          <span>إضافة أسبوع جديد</span>
+          <span className="next-week-hint">التالي: {nextWeekLabel}</span>
         </button>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useEscape } from '../lib/useEscape';
 import { getSaturdayOfWeek, formatWeekRange, toISODate, isValidISODate, formatGregorianShort, formatHijri } from '../lib/dates';
 
 interface Props {
@@ -18,8 +19,8 @@ export default function AddWeekModal({
   existingWeekKeys,
   onSelectExistingWeek,
 }: Props) {
-  // Default custom date to 2 weeks ahead or suggested
   const [customDate, setCustomDate] = useState<string>('');
+  useEscape(onClose, isOpen);
 
   if (!isOpen) return null;
 
