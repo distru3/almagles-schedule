@@ -2,6 +2,7 @@ import type { ScheduleRow, CustomColumn } from '../types';
 
 const KEY = 'almagles-schedule-v1';
 const COLS_KEY = 'almagles-columns-v1';
+const WEEKS_KEY = 'almagles-weeks-v1';
 
 export function loadRows(): ScheduleRow[] {
   try {
@@ -43,3 +44,23 @@ export function saveColumns(cols: CustomColumn[]): void {
   }
 }
 
+
+/** Week keys (Saturday ISO dates) added explicitly, so a week can exist before it has any sessions. */
+export function loadWeeks(): string[] {
+  try {
+    const raw = localStorage.getItem(WEEKS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((w): w is string => typeof w === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveWeeks(weeks: string[]): void {
+  try {
+    localStorage.setItem(WEEKS_KEY, JSON.stringify(weeks));
+  } catch {
+    /* storage full or unavailable — ignore */
+  }
+}

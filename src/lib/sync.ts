@@ -7,6 +7,7 @@ const NODE = 'schedule';
 export interface ScheduleSyncData {
   rows: ScheduleRow[];
   columns: CustomColumn[];
+  weeks: string[];
   updatedAt: number;
 }
 
@@ -14,6 +15,7 @@ interface SchedulePayload {
   updatedAt: number;
   rows?: ScheduleRow[];
   columns?: CustomColumn[];
+  weeks?: string[];
 }
 
 function normalizeRow(item: unknown): ScheduleRow | null {
@@ -74,6 +76,14 @@ export function extractColumns(payload: unknown): CustomColumn[] {
   return cols;
 }
 
+export function extractWeeks(payload: unknown): string[] {
+  if (!payload || typeof payload !== 'object') return [];
+  const raw = (payload as { weeks?: unknown }).weeks;
+  if (!raw) return [];
+  const list = Array.isArray(raw) ? raw : Object.values(raw);
+  return list.filter((w): w is string => typeof w === 'string');
+}
+
 export function extractSchedule(payload: unknown): ScheduleSyncData | null {
   if (!payload || typeof payload !== 'object') return null;
   const rows = extractRows(payload);
@@ -81,7 +91,7 @@ export function extractSchedule(payload: unknown): ScheduleSyncData | null {
   const columns = extractColumns(payload);
   const rawUpdatedAt = (payload as { updatedAt?: unknown }).updatedAt;
   const updatedAt = typeof rawUpdatedAt === 'number' ? rawUpdatedAt : 0;
-  return { rows, columns, updatedAt };
+  return { rows, columns, weeks: extractWeeks(payload), updatedAt };
 }
 
 /** Fetch the current schedule once (used for the initial hydrate). */
@@ -89,7 +99,7 @@ export async function fetchScheduleOnce(): Promise<ScheduleSyncData | null> {
   if (!isFirebaseConfigured || !database) return null;
   try {
     const snap = await get(ref(database, NODE));
-    if (!snap.exists()) return { rows: [], columns: [], updatedAt: 0 };
+    if (!snap.exists()) return { rows: [], columns: [], weeks: [], updatedAt: 0 };
     return extractSchedule(snap.val());
   } catch (err) {
     console.error('[sync] fetch error', err);
@@ -101,11 +111,12 @@ export async function fetchScheduleOnce(): Promise<ScheduleSyncData | null> {
 export async function pushSchedule(
   rows: ScheduleRow[],
   columns: CustomColumn[] = [],
+  weeks: string[] = [],
   timestamp = Date.now(),
 ): Promise<number | null> {
   if (!isFirebaseConfigured || !database) return null;
   try {
-    const payload: SchedulePayload = { updatedAt: timestamp, rows, columns };
+    const payload: SchedulePayload = { updatedAt: timestamp, rows, columns, weeks };
     await set(ref(database, NODE), payload);
     return timestamp;
   } catch (err) {
@@ -125,7 +136,7 @@ export function listenToSchedule(onData: (data: ScheduleSyncData) => void): Unsu
     ref(db, NODE),
     (snap) => {
       if (!snap.exists()) {
-        onData({ rows: [], columns: [], updatedAt: 0 });
+        onData({ rows: [], columns: [], weeks: [], updatedAt: 0 });
         return;
       }
       const data = extractSchedule(snap.val());

@@ -10,6 +10,7 @@ interface Props {
   onImportCsv: (file: File) => void;
   onTemplate: () => void;
   onPrint: () => void;
+  onRemoveBlank: () => void;
   onClear: () => void;
 }
 
@@ -28,6 +29,7 @@ export default function Toolbar({
   onImportCsv,
   onTemplate,
   onPrint,
+  onRemoveBlank,
   onClear,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -93,6 +95,9 @@ export default function Toolbar({
                 📄 تنزيل قالب CSV
               </button>
               <div className="menu-sep" />
+              <button role="menuitem" onClick={runAndClose(onRemoveBlank)}>
+                🧹 حذف الجلسات الفارغة
+              </button>
               <button role="menuitem" className="menu-danger" onClick={runAndClose(onClear)}>
                 🗑 مسح الجدول بالكامل
               </button>

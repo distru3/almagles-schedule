@@ -1,5 +1,7 @@
-import { Fragment, useRef, useEffect } from 'react';
+import { Fragment, useRef, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { ScheduleRow, CustomColumn } from '../types';
+import { isBlankRow, rankedValues } from '../lib/rows';
 import {
   formatHijri,
   formatGregorianShort,
@@ -17,6 +19,10 @@ import {
 interface Props {
   rows: ScheduleRow[];
   columns: CustomColumn[];
+  /** All week keys, sorted (undated last). */
+  weekKeys: string[];
+  /** While printing: only these weeks are rendered. */
+  printWeekKeys: string[] | null;
   nextWeekLabel: string;
   selectedWeekKey: string;
   onSelectWeekKey: (key: string) => void;
@@ -26,18 +32,19 @@ interface Props {
   onDeleteColumn: (colId: string) => void;
   onAddSession: (date: string) => void;
   onDeleteWeek: (weekKey: string) => void;
+  copySourceFor: (weekKey: string) => string | null;
+  onCopyWeek: (fromKey: string, toKey: string) => void;
+  onPrintWeeks: (weekKeys: string[]) => void;
   onOpenAddWeekModal: () => void;
 }
 
-function isBlankRow(row: ScheduleRow): boolean {
-  return (
-    !row.time.trim() &&
-    !row.section.trim() &&
-    !row.title.trim() &&
-    !row.notes.trim() &&
-    !row.linkUrl &&
-    !Object.values(row.customValues || {}).some((v) => v.trim())
-  );
+/** Common session times offered before anything has been typed. */
+const TIME_PRESETS = ['بعد الفجر', 'بعد الظهر', 'بعد العصر', 'بعد المغرب', 'بعد العشاء'];
+
+interface Suggestions {
+  time: string[];
+  section: string[];
+  custom: Record<string, string[]>;
 }
 
 function LinkCell({ row, onSetLink }: { row: ScheduleRow; onSetLink: () => void }) {
@@ -127,13 +134,60 @@ function AutoFoldingCell({
   placeholder,
   onChange,
   className = 'cell-text',
+  suggestions,
 }: {
   value: string;
   placeholder?: string;
   onChange: (v: string) => void;
   className?: string;
+  /** Values offered in a dropdown while the cell is focused. */
+  suggestions?: string[];
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [focused, setFocused] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
+
+  const query = value.trim();
+  const matches = (suggestions || [])
+    .filter((sug) => sug !== query && (!query || sug.includes(query)))
+    .slice(0, 8);
+  const showList = focused && matches.length > 0 && anchor !== null;
+
+  // Keep the dropdown attached to the cell while the page scrolls or resizes.
+  useEffect(() => {
+    if (!focused || !suggestions) return;
+    const place = () => setAnchor(textareaRef.current?.getBoundingClientRect() ?? null);
+    place();
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+    };
+  }, [focused, suggestions, value]);
+
+  const choose = (sug: string) => {
+    onChange(sug);
+    setActiveIdx(-1);
+    setFocused(false);
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!showList) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIdx((i) => (i + 1) % matches.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIdx((i) => (i <= 0 ? matches.length - 1 : i - 1));
+    } else if (e.key === 'Enter' && activeIdx >= 0) {
+      e.preventDefault();
+      choose(matches[activeIdx]);
+    } else if (e.key === 'Escape') {
+      setFocused(false);
+    }
+  };
 
   const resize = () => {
     const el = textareaRef.current;
@@ -173,9 +227,47 @@ function AutoFoldingCell({
         placeholder={placeholder}
         onChange={(e) => {
           onChange(e.target.value);
+          setActiveIdx(-1);
+          setFocused(true);
           resize();
         }}
+        onFocus={() => setFocused(true)}
+        onBlur={() => {
+          setFocused(false);
+          setActiveIdx(-1);
+        }}
+        onKeyDown={suggestions ? onKeyDown : undefined}
       />
+      {showList &&
+        createPortal(
+          <ul
+            className="suggest-list no-print"
+            role="listbox"
+            // Right-aligned to the cell, matching the RTL layout.
+            style={{
+              top: anchor.bottom + 4,
+              left: Math.max(8, anchor.right - Math.max(anchor.width, 160)),
+              width: Math.max(anchor.width, 160),
+            }}
+          >
+            {matches.map((sug, i) => (
+              <li
+                key={sug}
+                role="option"
+                aria-selected={i === activeIdx}
+                className={i === activeIdx ? 'is-active' : undefined}
+                // mousedown (not click) so the textarea keeps focus until the value is set
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  choose(sug);
+                }}
+              >
+                {sug}
+              </li>
+            ))}
+          </ul>,
+          document.body,
+        )}
       {/* Textareas can't grow to fit their content in print, so print a plain-text mirror instead. */}
       <div className="cell-print">{value}</div>
     </>
@@ -185,21 +277,33 @@ function AutoFoldingCell({
 function SessionCells({
   row,
   columns,
+  suggestions,
   onUpdate,
   onSetLink,
 }: {
   row: ScheduleRow;
   columns: CustomColumn[];
+  suggestions: Suggestions;
   onUpdate: (id: string, patch: Partial<ScheduleRow>) => void;
   onSetLink: (id: string) => void;
 }) {
   return (
     <>
       <td data-label="الوقت">
-        <AutoFoldingCell value={row.time} placeholder="مثال: 10:00" onChange={(v) => onUpdate(row.id, { time: v })} />
+        <AutoFoldingCell
+          value={row.time}
+          placeholder="مثال: بعد العصر"
+          suggestions={suggestions.time}
+          onChange={(v) => onUpdate(row.id, { time: v })}
+        />
       </td>
       <td data-label="القسم">
-        <AutoFoldingCell value={row.section} placeholder="القسم…" onChange={(v) => onUpdate(row.id, { section: v })} />
+        <AutoFoldingCell
+          value={row.section}
+          placeholder="القسم…"
+          suggestions={suggestions.section}
+          onChange={(v) => onUpdate(row.id, { section: v })}
+        />
       </td>
       <td data-label="العنوان">
         <AutoFoldingCell value={row.title} placeholder="عنوان الجلسة…" onChange={(v) => onUpdate(row.id, { title: v })} />
@@ -217,6 +321,7 @@ function SessionCells({
           <AutoFoldingCell
             value={row.customValues?.[col.id] || ''}
             placeholder={`${col.label}…`}
+            suggestions={suggestions.custom[col.id]}
             onChange={(v) => {
               const next = { ...(row.customValues || {}), [col.id]: v };
               onUpdate(row.id, { customValues: next });
@@ -234,6 +339,8 @@ function SessionCells({
 export default function ScheduleTable({
   rows,
   columns,
+  weekKeys,
+  printWeekKeys,
   nextWeekLabel,
   selectedWeekKey,
   onSelectWeekKey,
@@ -243,6 +350,9 @@ export default function ScheduleTable({
   onDeleteColumn,
   onAddSession,
   onDeleteWeek,
+  copySourceFor,
+  onCopyWeek,
+  onPrintWeeks,
   onOpenAddWeekModal,
 }: Props) {
   // Group rows by week (Saturday key)
@@ -253,12 +363,18 @@ export default function ScheduleTable({
     weekMap.get(key)!.push(row);
   }
 
-  // Sort week keys chronologically
-  const sortedKeys = Array.from(weekMap.keys()).sort((a, b) => {
-    if (a === 'unassigned') return 1;
-    if (b === 'unassigned') return -1;
-    return a.localeCompare(b);
-  });
+  const sortedKeys = weekKeys;
+
+  const suggestions = useMemo<Suggestions>(() => {
+    const custom: Record<string, string[]> = {};
+    for (const col of columns) custom[col.id] = rankedValues(rows.map((r) => r.customValues?.[col.id] || ''));
+    const usedTimes = rankedValues(rows.map((r) => r.time));
+    return {
+      time: [...usedTimes, ...TIME_PRESETS.filter((t) => !usedTimes.includes(t))],
+      section: rankedValues(rows.map((r) => r.section)),
+      custom,
+    };
+  }, [rows, columns]);
 
   // Effective selected week key
   const effectiveWeekKey =
@@ -295,15 +411,9 @@ export default function ScheduleTable({
     return rel ? `${rel} · ${formatWeekShort(k)}` : formatWeekShort(k);
   };
 
-  const handlePrintSpecificWeek = (weekKey: string) => {
-    onSelectWeekKey(weekKey);
-    setTimeout(() => {
-      window.print();
-    }, 100);
-  };
-
-  const keysToRender =
-    effectiveWeekKey === 'all'
+  const keysToRender = printWeekKeys
+    ? printWeekKeys
+    : effectiveWeekKey === 'all'
       ? sortedKeys
       : sortedKeys.includes(effectiveWeekKey)
       ? [effectiveWeekKey]
@@ -347,7 +457,13 @@ export default function ScheduleTable({
           <td className="date-cell" data-label="التاريخ">
             <DateCell value={row.date} onChange={(v) => onUpdate(row.id, { date: v })} />
           </td>
-          <SessionCells row={row} columns={columns} onUpdate={onUpdate} onSetLink={onSetLink} />
+          <SessionCells
+                  row={row}
+                  columns={columns}
+                  suggestions={suggestions}
+                  onUpdate={onUpdate}
+                  onSetLink={onSetLink}
+                />
           {actionsCell(row, null)}
         </tr>
       ));
@@ -355,8 +471,22 @@ export default function ScheduleTable({
 
     const weekDays = generateWeekDates(weekKey);
     let sessionNumber = 0;
+    const copySource = weekRows.every(isBlankRow) ? copySourceFor(weekKey) : null;
 
-    return weekDays.map((day, dayIdx) => {
+    const copyBanner = copySource && (
+      <tr key="copy-banner" className="copy-banner-row no-print">
+        <td colSpan={totalCols} data-label="">
+          <div className="copy-banner">
+            <span>هذا الأسبوع فارغ — أضف جلسة لأي يوم، أو ابدأ بنسخ جلسات أسبوع سابق (بدون الملاحظات).</span>
+            <button type="button" className="btn-copy-week" onClick={() => onCopyWeek(copySource, weekKey)}>
+              📋 نسخ جلسات أسبوع {formatWeekShort(copySource)}
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+
+    const dayRows = weekDays.map((day, dayIdx) => {
       const sessions = weekRows.filter((r) => r.date === day);
       const altClass = [dayIdx % 2 === 1 ? 'day-alt' : '', day === todayISO() ? 'day-today' : '']
         .filter(Boolean)
@@ -397,7 +527,13 @@ export default function ScheduleTable({
                     <DayLabel date={day} onAddSession={() => onAddSession(day)} />
                   </td>
                 )}
-                <SessionCells row={row} columns={columns} onUpdate={onUpdate} onSetLink={onSetLink} />
+                <SessionCells
+                  row={row}
+                  columns={columns}
+                  suggestions={suggestions}
+                  onUpdate={onUpdate}
+                  onSetLink={onSetLink}
+                />
                 {actionsCell(row, weekDays)}
               </tr>
             );
@@ -405,6 +541,8 @@ export default function ScheduleTable({
         </Fragment>
       );
     });
+
+    return [copyBanner, ...dayRows];
   };
 
   return (
@@ -491,7 +629,7 @@ export default function ScheduleTable({
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 && (
+            {sortedKeys.length === 0 && (
               <tr className="empty-row">
                 <td
                   data-label=""
@@ -525,7 +663,7 @@ export default function ScheduleTable({
                             <button
                               type="button"
                               className="btn-week-print-session"
-                              onClick={() => handlePrintSpecificWeek(weekKey)}
+                              onClick={() => onPrintWeeks([weekKey])}
                               title="طباعة هذا الأسبوع فقط بصيغة PDF"
                             >
                               🖨 طباعة هذا الأسبوع

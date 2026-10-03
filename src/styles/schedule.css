@@ -1236,16 +1236,161 @@ tbody tr.day-today td.day-cell {
   flex-wrap: wrap;
 }
 
+/* ===== Suggestions dropdown ===== */
+.suggest-list {
+  position: fixed;
+  z-index: 900;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: #fff;
+  border: 1.5px solid var(--gold);
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(15, 61, 62, 0.18);
+  max-height: 240px;
+  overflow-y: auto;
+  direction: rtl;
+  font-family: 'Tajawal', sans-serif;
+}
+.suggest-list li {
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--ink-deep);
+}
+.suggest-list li:hover,
+.suggest-list li.is-active {
+  background: var(--parchment);
+}
+
+/* ===== Copy-previous-week banner ===== */
+.copy-banner-row td {
+  background: #f1f8f5 !important;
+  padding: 10px 16px !important;
+}
+.copy-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: #2d5f57;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.btn-copy-week {
+  background: var(--ink);
+  color: #fff;
+  border: none;
+  font-family: 'Tajawal', sans-serif;
+  font-weight: 700;
+  font-size: 0.88rem;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-copy-week:hover {
+  background: var(--ink-deep);
+}
+
+/* ===== Print picker ===== */
+.print-pick-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+.print-pick-quick {
+  display: flex;
+  gap: 6px;
+}
+.print-pick-quick button {
+  font-family: 'Tajawal', sans-serif;
+  font-weight: 700;
+  font-size: 0.8rem;
+  background: var(--parchment);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.print-week-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.print-week-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--ink-deep);
+}
+.print-week-item.is-on {
+  border-color: var(--gold);
+  background: #fdf8ea;
+}
+.print-week-item input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--ink);
+}
+.print-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #7a6e4d;
+}
+.modal-btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* ===== Mobile & Touch Screen: Responsive Cards ===== */
 @media screen and (max-width: 768px) {
   body {
     padding: 14px 10px 40px;
   }
   .masthead {
-    padding: 22px 16px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    margin-bottom: 12px;
   }
   .masthead h1 {
-    font-size: 1.8rem;
+    font-size: 1.45rem;
+    margin: 0;
+  }
+  .masthead .divider {
+    display: none;
+  }
+  .masthead p {
+    font-size: 0.85rem;
+  }
+  details.help {
+    padding: 10px 14px;
+    margin-bottom: 12px;
+  }
+  details.help summary {
+    font-size: 0.9rem;
+  }
+  .copy-banner-row td::before {
+    content: none;
+  }
+  .btn-copy-week {
+    width: 100%;
+    min-height: 44px;
   }
   .toolbar {
     gap: 8px;

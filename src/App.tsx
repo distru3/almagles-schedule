@@ -1,18 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ScheduleRow, CustomColumn } from './types';
 import { emptyRow, parseCsv, downloadCsv, downloadTemplate } from './lib/csv';
-import { loadRows, saveRows, loadColumns, saveColumns } from './lib/storage';
+import { loadRows, saveRows, loadColumns, saveColumns, loadWeeks, saveWeeks } from './lib/storage';
+import { collectWeekKeys, copyWeekRows, findCopySource, isBlankRow } from './lib/rows';
 import { isFirebaseConfigured, database } from './lib/firebase';
 import { fetchScheduleOnce, pushSchedule, listenToSchedule } from './lib/sync';
-import {
-  getSaturdayOfWeek,
-  generateWeekDates,
-  addDays,
-  isValidISODate,
-  toISODate,
-  formatWeekShort,
-  getWeekKey,
-} from './lib/dates';
+import { getSaturdayOfWeek, addDays, toISODate, formatWeekShort, getWeekKey } from './lib/dates';
 import Masthead from './components/Masthead';
 import HelpInstructions from './components/HelpInstructions';
 import Toolbar, { type SyncStatus } from './components/Toolbar';
@@ -21,23 +14,26 @@ import ScheduleTable from './components/ScheduleTable';
 import LinkModal from './components/LinkModal';
 import AddColumnModal from './components/AddColumnModal';
 import AddWeekModal from './components/AddWeekModal';
+import PrintModal from './components/PrintModal';
 
-function createWeekRows(saturdayDate: Date): ScheduleRow[] {
-  const dates = generateWeekDates(saturdayDate);
-  return dates.map((d) => emptyRow(d));
+/** Arabic count of sessions with the right noun form, e.g. "جلستان" / "3 جلسات" / "11 جلسة". */
+function sessionsCount(n: number): string {
+  if (n === 1) return 'جلسة واحدة';
+  if (n === 2) return 'جلستان';
+  return n <= 10 ? `${n} جلسات` : `${n} جلسة`;
 }
 
-function createInitialWeeks(): ScheduleRow[] {
+/** A brand-new schedule starts with this week and next week, with empty days. */
+function createInitialWeeks(): string[] {
   const thisSaturday = getSaturdayOfWeek(new Date());
-  const nextSaturday = addDays(thisSaturday, 7);
-  return [...createWeekRows(thisSaturday), ...createWeekRows(nextSaturday)];
+  return [toISODate(thisSaturday), toISODate(addDays(thisSaturday, 7))];
 }
 
 export default function App() {
-  const [rows, setRows] = useState<ScheduleRow[]>(() => {
-    const loaded = loadRows();
-    if (loaded.length > 0) return loaded;
-    return createInitialWeeks();
+  const [rows, setRows] = useState<ScheduleRow[]>(() => loadRows());
+  const [weeks, setWeeks] = useState<string[]>(() => {
+    const loaded = loadWeeks();
+    return loaded.length > 0 || loadRows().length > 0 ? loaded : createInitialWeeks();
   });
 
   const [columns, setColumns] = useState<CustomColumn[]>(() => loadColumns());
@@ -49,6 +45,8 @@ export default function App() {
   const [activeLinkRowId, setActiveLinkRowId] = useState<string | null>(null);
   const [isAddColumnOpen, setIsAddColumnOpen] = useState(false);
   const [isAddWeekOpen, setIsAddWeekOpen] = useState(false);
+  const [isPrintOpen, setIsPrintOpen] = useState(false);
+  const [printWeekKeys, setPrintWeekKeys] = useState<string[] | null>(null);
   const [selectedWeekKey, setSelectedWeekKey] = useState<string>(() => {
     return toISODate(getSaturdayOfWeek(new Date()));
   });
@@ -70,16 +68,10 @@ export default function App() {
         skipPush.current = true;
         remoteApplied.current = true;
 
-        let nextRows = remote.rows;
-        // If remote has no rows at all, bake in initial 2 weeks (current + next)
-        if (nextRows.length === 0) {
-          nextRows = createInitialWeeks();
-        }
-        setRows(nextRows);
-        saveRows(nextRows);
-
+        setRows(remote.rows);
+        // An empty shared schedule starts with this week and next week.
+        setWeeks(remote.rows.length === 0 && remote.weeks.length === 0 ? createInitialWeeks() : remote.weeks);
         setColumns(remote.columns);
-        saveColumns(remote.columns);
       } else {
         remoteApplied.current = true;
       }
@@ -95,9 +87,8 @@ export default function App() {
       skipPush.current = true;
       remoteApplied.current = true;
       setRows(remote.rows);
-      saveRows(remote.rows);
+      setWeeks(remote.rows.length === 0 && remote.weeks.length === 0 ? createInitialWeeks() : remote.weeks);
       setColumns(remote.columns);
-      saveColumns(remote.columns);
       if (!syncStatusRef.live) {
         syncStatusRef.live = true;
         setSyncStatus('live');
@@ -114,7 +105,8 @@ export default function App() {
   useEffect(() => {
     saveRows(rows);
     saveColumns(columns);
-  }, [rows, columns]);
+    saveWeeks(weeks);
+  }, [rows, columns, weeks]);
 
   // Debounced push to Firebase on local edits (both rows and custom columns)
   useEffect(() => {
@@ -129,14 +121,26 @@ export default function App() {
     debounceRef.current = window.setTimeout(async () => {
       const ts = Date.now();
       lastOwnTimestamp.current = ts;
-      const ok = await pushSchedule(rows, columns, ts);
+      const ok = await pushSchedule(rows, columns, weeks, ts);
       setSyncStatus(ok !== null ? 'live' : 'local');
     }, 700);
 
     return () => {
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
     };
-  }, [rows, columns]);
+  }, [rows, columns, weeks]);
+
+  // Print the chosen weeks: render them, print, then go back to the normal view.
+  useEffect(() => {
+    if (!printWeekKeys) return;
+    const reset = () => setPrintWeekKeys(null);
+    window.addEventListener('afterprint', reset);
+    const timer = window.setTimeout(() => window.print(), 80);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('afterprint', reset);
+    };
+  }, [printWeekKeys]);
 
   const dismissToast = useCallback(() => setToast(null), []);
 
@@ -148,9 +152,11 @@ export default function App() {
   const snapshotUndo = () => {
     const prevRows = rows;
     const prevColumns = columns;
+    const prevWeeks = weeks;
     return () => {
       setRows(prevRows);
       setColumns(prevColumns);
+      setWeeks(prevWeeks);
     };
   };
 
@@ -158,10 +164,17 @@ export default function App() {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   };
 
+  /** Makes sure a week stays listed even after its last session is removed. */
+  const keepWeek = (weekKey: string) => {
+    if (weekKey === 'unassigned') return;
+    setWeeks((prev) => (prev.includes(weekKey) ? prev : [...prev, weekKey]));
+  };
+
   const remove = (id: string) => {
     const index = rows.findIndex((r) => r.id === id);
     if (index === -1) return;
     const removed = rows[index];
+    keepWeek(getWeekKey(removed.date));
     setRows((prev) => prev.filter((r) => r.id !== id));
     flash('تم حذف الجلسة', 'ok', () => {
       setRows((prev) => {
@@ -172,34 +185,18 @@ export default function App() {
     });
   };
 
-  const computeNextSaturday = (): Date => {
-    let latestSaturday: Date | null = null;
-    for (const r of rows) {
-      if (isValidISODate(r.date)) {
-        const sat = getSaturdayOfWeek(r.date);
-        if (!latestSaturday || sat.getTime() > latestSaturday.getTime()) {
-          latestSaturday = sat;
-        }
-      }
-    }
-    return latestSaturday ? addDays(latestSaturday, 7) : getSaturdayOfWeek(new Date());
-  };
+  const weekKeys = collectWeekKeys(rows, weeks);
+  const datedWeekKeys = weekKeys.filter((k) => k !== 'unassigned');
 
-  const nextSaturdayDate = computeNextSaturday();
+  const nextSaturdayDate =
+    datedWeekKeys.length > 0
+      ? addDays(getSaturdayOfWeek(datedWeekKeys[datedWeekKeys.length - 1]), 7)
+      : getSaturdayOfWeek(new Date());
   const nextWeekLabel = formatWeekShort(nextSaturdayDate);
 
-  const existingWeekKeys = Array.from(
-    new Set(
-      rows
-        .filter((r) => isValidISODate(r.date))
-        .map((r) => toISODate(getSaturdayOfWeek(r.date))),
-    ),
-  );
-
   const handleAddWeek = (saturdayDate: Date) => {
-    const newWeekRows = createWeekRows(saturdayDate);
     const weekKey = toISODate(saturdayDate);
-    setRows((prev) => [...prev, ...newWeekRows]);
+    keepWeek(weekKey);
     setSelectedWeekKey(weekKey);
     flash(`تمت إضافة أسبوع ${formatWeekShort(saturdayDate)}`);
   };
@@ -208,33 +205,54 @@ export default function App() {
     setRows((prev) => [...prev, emptyRow(date)]);
   };
 
+  const copyWeek = (fromKey: string, toKey: string) => {
+    const copies = copyWeekRows(rows, fromKey, toKey);
+    if (copies.length === 0) return;
+    const copiedIds = new Set(copies.map((r) => r.id));
+    setRows((prev) => [...prev, ...copies]);
+    flash(`تم نسخ ${sessionsCount(copies.length)} من أسبوع ${formatWeekShort(fromKey)}`, 'ok', () =>
+      setRows((prev) => prev.filter((r) => !copiedIds.has(r.id))),
+    );
+  };
+
   const deleteWeek = (weekKey: string) => {
     const removed = rows.filter((r) => getWeekKey(r.date) === weekKey);
     const removedIds = new Set(removed.map((r) => r.id));
+    const hadWeek = weeks.includes(weekKey);
     setRows((prev) => prev.filter((r) => !removedIds.has(r.id)));
+    setWeeks((prev) => prev.filter((w) => w !== weekKey));
     const label = weekKey === 'unassigned' ? 'الجلسات غير محددة التاريخ' : `أسبوع ${formatWeekShort(weekKey)}`;
-    flash(`تم حذف ${label}`, 'ok', () => setRows((prev) => [...prev, ...removed]));
+    flash(`تم حذف ${label}`, 'ok', () => {
+      setRows((prev) => [...prev, ...removed]);
+      if (hadWeek) keepWeek(weekKey);
+    });
+  };
+
+  const removeBlankSessions = () => {
+    const blank = rows.filter(isBlankRow);
+    if (blank.length === 0) {
+      flash('لا توجد جلسات فارغة');
+      return;
+    }
+    const undo = snapshotUndo();
+    // Keep their weeks so emptied weeks don't disappear.
+    const blankWeeks = blank.map((r) => getWeekKey(r.date)).filter((k) => k !== 'unassigned');
+    setWeeks((prev) => Array.from(new Set([...prev, ...blankWeeks])));
+    setRows((prev) => prev.filter((r) => !isBlankRow(r)));
+    flash(`تم حذف الجلسات الفارغة (${sessionsCount(blank.length)})`, 'ok', undo);
   };
 
   const addColumn = (label: string) => {
     const id = `col_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
     const newCol: CustomColumn = { id, label };
-    setColumns((prev) => {
-      const updated = [...prev, newCol];
-      saveColumns(updated);
-      return updated;
-    });
+    setColumns((prev) => [...prev, newCol]);
     flash(`تمت إضافة عمود «${label}»`);
   };
 
   const deleteColumn = (colId: string) => {
     const col = columns.find((c) => c.id === colId);
     const undo = snapshotUndo();
-    setColumns((prev) => {
-      const updated = prev.filter((c) => c.id !== colId);
-      saveColumns(updated);
-      return updated;
-    });
+    setColumns((prev) => prev.filter((c) => c.id !== colId));
     setRows((prev) =>
       prev.map((r) => {
         if (!r.customValues || !r.customValues[colId]) return r;
@@ -268,10 +286,8 @@ export default function App() {
       const undo = snapshotUndo();
 
       setRows(parsed);
-      saveRows(parsed);
-
+      setWeeks([]);
       setColumns(detectedColumns);
-      saveColumns(detectedColumns);
 
       if (skipped.length) {
         flash(`تم الاستيراد — تم تخطي ${skipped.length} صف (أرقام: ${skipped.join(', ')})`, 'err', undo);
@@ -287,6 +303,7 @@ export default function App() {
     if (!window.confirm('سيتم مسح كل صفوف الجدول لجميع الزوار. هل أنت متأكد؟')) return;
     const undo = snapshotUndo();
     setRows([]);
+    setWeeks([]);
     flash('تم مسح الجدول', 'ok', undo);
   };
 
@@ -310,22 +327,31 @@ export default function App() {
         onExportCsv={exportCsvFile}
         onImportCsv={importCsvFile}
         onTemplate={template}
-        onPrint={() => window.print()}
+        onPrint={() => setIsPrintOpen(true)}
+        onRemoveBlank={removeBlankSessions}
         onClear={clear}
       />
 
       <ScheduleTable
         rows={rows}
         columns={columns}
+        weekKeys={weekKeys}
+        printWeekKeys={printWeekKeys}
         nextWeekLabel={nextWeekLabel}
         selectedWeekKey={selectedWeekKey}
-        onSelectWeekKey={setSelectedWeekKey}
+        onSelectWeekKey={(k) => {
+          setPrintWeekKeys(null);
+          setSelectedWeekKey(k);
+        }}
         onUpdate={update}
         onDelete={remove}
         onSetLink={(id) => setActiveLinkRowId(id)}
         onDeleteColumn={deleteColumn}
         onAddSession={addSession}
         onDeleteWeek={deleteWeek}
+        copySourceFor={(k) => findCopySource(rows, k)}
+        onCopyWeek={copyWeek}
+        onPrintWeeks={setPrintWeekKeys}
         onOpenAddWeekModal={() => setIsAddWeekOpen(true)}
       />
 
@@ -350,12 +376,23 @@ export default function App() {
         onClose={() => setIsAddColumnOpen(false)}
       />
 
+      <PrintModal
+        isOpen={isPrintOpen}
+        weekKeys={weekKeys}
+        defaultSelected={weekKeys.includes(selectedWeekKey) ? [selectedWeekKey] : weekKeys}
+        onPrint={(keys) => {
+          setIsPrintOpen(false);
+          setPrintWeekKeys(keys);
+        }}
+        onClose={() => setIsPrintOpen(false)}
+      />
+
       <AddWeekModal
         isOpen={isAddWeekOpen}
         onClose={() => setIsAddWeekOpen(false)}
         onAddWeek={handleAddWeek}
         suggestedSaturday={nextSaturdayDate}
-        existingWeekKeys={existingWeekKeys}
+        existingWeekKeys={datedWeekKeys}
         onSelectExistingWeek={(k) => setSelectedWeekKey(k)}
       />
     </>
